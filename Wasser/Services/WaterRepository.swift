@@ -46,7 +46,7 @@ final class WaterRepository: ObservableObject {
     /// recognisable Bavarian waters so the detail screen has content.
     private func seedDefaultFavoritesIfNeeded() {
         guard favoriteIDs.isEmpty, !stations.isEmpty else { return }
-        let preferred = ["Walchensee", "Isar", "Starnberger See", "Chiemsee", "Tegernsee"]
+        let preferred = ["Starnberger See", "Chiemsee", "Tegernsee", "Königssee", "Isar"]
         // Match on a normalised key (diacritics folded, non-alphanumerics
         // dropped) so the scraped names ("StarnbergerSee") still resolve.
         func key(_ s: String) -> String {

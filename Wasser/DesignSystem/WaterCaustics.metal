@@ -76,9 +76,9 @@ half4 waterCaustics(float2 position,
     ray = ray * 0.7 + pow(ray2, 3.0) * 0.5;
     col += uSun * ray * pow(uv.y, 2.0) * uRays;
 
-    // Sparse surface sparkle.
+    // Sparse surface sparkle (kept faint so foreground text stays legible).
     float m = noise(uv * 40.0 + float2(uTime * 0.05, -uTime * 0.3));
-    col += uSun * smoothstep(0.965, 1.0, m) * 0.18;
+    col += uSun * smoothstep(0.965, 1.0, m) * 0.09;
 
     // Vignette.
     float vig = smoothstep(1.15, 0.25, length(uv - 0.5));

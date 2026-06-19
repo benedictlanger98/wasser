@@ -42,21 +42,21 @@ final class StationDetailViewModel: ObservableObject {
                 ?? series?.latest?.value
                 ?? 0
 
-            // Hourly line: the 15-min series for the current day only;
-            // synthesise when a real series is unavailable (e.g. lakes, which
-            // are read manually).
+            // Hourly line: the 15-min series for the current day only. Left
+            // empty (card hidden) when no real series exists — e.g. lakes that
+            // are read manually rather than logged continuously. No synthetic
+            // placeholder.
             let todayPoints = (series?.points ?? []).filter { Fmt.isToday($0.timestamp) }
-            let hourly = todayPoints.count >= 2
-                ? todayPoints
-                : ConditionEnrichment.syntheticHourly(base: waterTemp)
+            let hourly = todayPoints.count >= 2 ? todayPoints : []
 
-            // 10-day trend from real daily aggregates (today first), else synthetic.
-            let daily: [DayTrend] = aggregates.isEmpty
-                ? ConditionEnrichment.dailyTrend(base: waterTemp)
-                : aggregates.map { agg in
-                    DayTrend(label: Fmt.isToday(agg.date) ? "Heute" : Fmt.weekdayShort(agg.date),
-                             low: agg.low, high: agg.high)
-                }
+            // 10-day trend from real daily aggregates (today first). Only days
+            // within the last ~11 days count, so manually-read stations whose
+            // newest "daily" value is months old show nothing rather than a
+            // misleadingly recent-looking trend (card hidden when empty).
+            let recentCutoff = Date().addingTimeInterval(-11 * 86_400)
+            let daily: [DayTrend] = aggregates
+                .filter { $0.date >= recentCutoff }
+                .map { DayTrend(date: $0.date, low: $0.low, high: $0.high) }
 
             conditions = LocationConditions(
                 station: station,

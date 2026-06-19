@@ -37,8 +37,9 @@ struct WaterDetailView: View {
 
     private var legibilityOverlay: some View {
         LinearGradient(stops: [
-            .init(color: .black.opacity(0.32), location: 0),
-            .init(color: .clear, location: 0.22),
+            .init(color: .black.opacity(0.45), location: 0),
+            .init(color: .black.opacity(0.12), location: 0.18),
+            .init(color: .clear, location: 0.42),
             .init(color: .clear, location: 0.60),
             .init(color: Color(red: 0, green: 0.04, blue: 0.06).opacity(0.45), location: 1)
         ], startPoint: .top, endPoint: .bottom)
@@ -63,8 +64,10 @@ struct WaterDetailView: View {
                 Text("°").font(.system(size: 40, weight: .light)).padding(.top, 10)
             }
             Text(conditionText).font(.system(size: 21, weight: .medium))
-            Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
-                .font(.system(size: 18, weight: .semibold)).opacity(0.92)
+            if c?.daily.isEmpty == false {
+                Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
+                    .font(.system(size: 18, weight: .semibold)).opacity(0.92)
+            }
             if let air = c?.weather?.temperature {
                 Label("Luft \(Fmt.f0(air))°", systemImage: "drop")
                     .font(.system(size: 13, weight: .semibold))
@@ -99,8 +102,12 @@ struct WaterDetailView: View {
     @ViewBuilder
     private func cards(_ c: LocationConditions) -> some View {
         VStack(spacing: 11) {
-            HourlyTemperatureCard(hourly: c.hourly)
-            DailyTrendCard(days: c.daily)
+            if !c.hourly.isEmpty {
+                HourlyTemperatureCard(hourly: c.hourly)
+            }
+            if !c.daily.isEmpty {
+                DailyTrendCard(days: c.daily)
+            }
             LazyVGrid(columns: columns, spacing: 11) {
                 AirWaterCard(water: c.waterTemperature, air: c.weather?.temperature)
                 UVCard(index: c.weather?.uvIndex ?? 0, category: c.weather?.uvCategory ?? "–")

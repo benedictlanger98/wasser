@@ -30,8 +30,8 @@ struct WaterHeroBackground: View {
                         .float3(Float(theme.deepRGB.0), Float(theme.deepRGB.1), Float(theme.deepRGB.2)),
                         .float3(Float(theme.shallowRGB.0), Float(theme.shallowRGB.1), Float(theme.shallowRGB.2)),
                         .float3(Float(theme.sunRGB.0), Float(theme.sunRGB.1), Float(theme.sunRGB.2)),
-                        .float(Float(theme.intensity)),
-                        .float(Float(theme.rays)),
+                        .float(Float(theme.intensity * 0.5)),
+                        .float(Float(theme.rays * 0.55)),
                         .float(Float(theme.flow))
                     ))
             }

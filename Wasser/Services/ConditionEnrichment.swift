@@ -47,27 +47,4 @@ enum ConditionEnrichment {
         }
         return FlowInfo(speedMetersPerSecond: speed, direction: "Nord")
     }
-
-    /// 10-day trend derived from the current water temperature, mirroring the
-    /// mock's `genDaily`. Placeholder until a water-temperature forecast exists.
-    static func dailyTrend(base: Double) -> [DayTrend] {
-        let labels = ["Heute", "Mi", "Do", "Fr", "Sa", "So", "Mo", "Di", "Mi", "Do"]
-        return labels.enumerated().map { index, label in
-            let center = base + sin(Double(index) / 2) * 1.4 - Double(index) * 0.18
-            let low = center - 2.1 - Double(index % 3) * 0.2
-            let high = center + 1.7 + Double(index % 2) * 0.3
-            return DayTrend(label: label, low: low, high: high)
-        }
-    }
-
-    /// Synthesises 24 hourly water-temperature points around `base` for when a
-    /// real series is unavailable (mirrors the mock's `genHourly`).
-    static func syntheticHourly(base: Double, parameter: MeasurementParameter = .waterTemperature) -> [Measurement] {
-        let now = Date()
-        return (0..<24).map { i in
-            let value = base + sin(Double(i) / 24 * .pi * 2 - 0.7) * 0.9 + sin(Double(i) / 3) * 0.12
-            let timestamp = now.addingTimeInterval(-Double(23 - i) * 3600)
-            return Measurement(parameter: parameter, timestamp: timestamp, value: value)
-        }
-    }
 }
