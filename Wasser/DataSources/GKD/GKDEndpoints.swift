@@ -49,43 +49,42 @@ enum GKDEndpoints {
         return c.url!
     }
 
-    /// The "messwerte" (current values) tab for a station, derived from the
-    /// detail URL captured during catalogue scraping when available, otherwise
-    /// reconstructed from the messstellennummer.
+    /// The "messwerte" (current values) tab for a station.
+    ///
+    /// Verified live 2026-06: overview links already point straight at the
+    /// messwerte tab (".../<place-slug>-<nr>/messwerte?method=tabellen"), so the
+    /// captured detail URL is used as-is — preserving its query, which selects
+    /// the table view. Only a bare station URL gets the tab appended.
     static func messwerte(for station: MeasurementStation,
                           parameter: MeasurementParameter) -> URL? {
-        if let detail = station.detailURL {
-            return detail
-                .deletingLastPathComponent()
-                .appendingPathComponent("messwerte")
-        }
-        return nil
+        guard let detail = station.detailURL else { return nil }
+        if detail.lastPathComponent == "messwerte" { return detail }
+        return detail.appendingPathComponent("messwerte")
     }
 
-    /// CSV / time-series download for a station and parameter over a range.
+    /// CSV / time-series download endpoint for a station.
     ///
-    /// GKD offers a "Messwerte herunterladen" action on station pages. The exact
-    /// query contract must be confirmed against the live site; this builds the
-    /// canonical-looking request and is the single place to adjust once
-    /// verified.
+    /// Verified live 2026-06: the download lives at a sibling of "messwerte"
+    /// (".../<place-slug>-<nr>/download"), NOT at ".../messwerte/download". The
+    /// page is a POST form gated by mandatory terms/privacy checkboxes; it
+    /// exports ISO-8859-1 CSV, offers only fixed periods (Aktueller Monat /
+    /// Aktuelles Jahr / Gesamtzeitraum) and delivers custom ranges
+    /// asynchronously by e-mail — so a plain GET with date-range query params
+    /// (the previous guess) cannot drive it. This returns the canonical
+    /// endpoint URL; `GKDScraper.timeSeries` treats it as best-effort and falls
+    /// back to scraping the rendered table when the GET yields no CSV. Wire up
+    /// the POST contract here once it is implemented.
     static func download(for station: MeasurementStation,
                          parameter: MeasurementParameter,
                          range: TimeRange) -> URL? {
-        guard let detail = station.detailURL,
-              var components = URLComponents(url: detail, resolvingAgainstBaseURL: false) else {
-            return nil
-        }
-        components.path = detail.deletingLastPathComponent()
-            .appendingPathComponent("messwerte")
-            .appendingPathComponent("download")
-            .path
-        let formatter = ISO8601DateFormatter()
-        let now = Date()
-        components.queryItems = [
-            URLQueryItem(name: "zr", value: range.rawValue),
-            URLQueryItem(name: "beginn", value: formatter.string(from: now.addingTimeInterval(-range.interval))),
-            URLQueryItem(name: "ende", value: formatter.string(from: now))
-        ]
+        guard let detail = station.detailURL else { return nil }
+        let stationDir = detail.lastPathComponent == "messwerte"
+            ? detail.deletingLastPathComponent()
+            : detail
+        guard var components = URLComponents(
+            url: stationDir.appendingPathComponent("download"),
+            resolvingAgainstBaseURL: false) else { return nil }
+        components.query = nil
         return components.url
     }
 }

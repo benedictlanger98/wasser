@@ -32,7 +32,10 @@ struct GKDScraper: Sendable {
             return nil
         }
         let html = try await client.getText(url)
-        return GKDParser.parseMeasurementTable(html: html, parameter: parameter).last
+        // Verified live 2026-06: the messwerte table is ordered newest-first,
+        // so pick the row with the maximum timestamp rather than the last row.
+        return GKDParser.parseMeasurementTable(html: html, parameter: parameter)
+            .max { $0.timestamp < $1.timestamp }
     }
 
     /// Loads a time series for a parameter, preferring the CSV download and
