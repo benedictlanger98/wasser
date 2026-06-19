@@ -103,16 +103,24 @@ in SwiftUI under `Views/` + `DesignSystem/`:
 
 - **Detail** (`Views/Detail/`) — animated water hero (`WaterHeroBackground`, a
   faithful Metal port of the mock's WebGL caustics shader in
-  `WaterCaustics.metal`, driven by `TimelineView`+`.colorEffect`), hero header,
-  hourly strip, 10-day trend, and the two-column condition grid (Luft & Wasser,
-  UV, Wind, Wasserqualität, Sonnenauf-/untergang; Strömung for rivers,
-  Wellenhöhe/Gezeiten for sea). Cards use the frosted `GlassCard`.
+  `WaterCaustics.metal`, driven by `TimelineView`+`.colorEffect`), an optional
+  severe-weather warning banner (`WeatherAlertBanner`, from WeatherKit
+  `weatherAlerts`), hero header, hourly strip (with reference gridlines + time
+  markers), 10-day trend, and the two-column condition grid (Luft & Wasser, UV,
+  Wind, **Badehinweis** — an honest swimming-comfort hint derived from the
+  measured water temperature, replacing the fabricated water-quality card —
+  Wasserstand and/or Abfluss with a ± annual-mean readout,
+  Sonnenauf-/untergang; Wellenhöhe/Gezeiten for sea). The small tiles share a
+  fixed minimum height (`smallCardMinHeight`) so they line up. Cards use the
+  frosted `GlassCard`; the hero condition line shows comfort + temperature
+  trend (e.g. "Angenehm · steigend").
 - **List** (`Views/List/`) — saved-location gradient cards with shimmer.
 - **Search** (`Views/Search/`) — system keyboard (the mock's drawn keyboard is a
   web artifact), live filtering over the catalogue, tap-to-save.
-- **Root** (`Views/Root/`) — swipeable detail pager with the custom bottom bar
-  (search · page dots · list) and sliding screen transitions, driven by
-  `AppRouter`.
+- **Root** (`Views/Root/`) — swipeable detail pager over a backdrop drawn from
+  the active card's water theme (so over-scrolling reveals matching water tones,
+  not black), with the custom bottom bar (page dots in a Liquid Glass pill on
+  iOS 26 · list button) and sliding screen transitions, driven by `AppRouter`.
 
 Per-type colour themes (`WaterTheme`) are ported verbatim from the mock. The
 original design handoff is kept in `Design/` (`Wassertemperatur.dc.html` plus

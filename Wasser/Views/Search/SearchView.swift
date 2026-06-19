@@ -75,7 +75,7 @@ private struct ResultRow: View {
                 .fill(theme.cardGradient)
                 .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 1) {
-                Text(station.waterBodyName).font(.system(size: 17)).foregroundStyle(.white)
+                Text(station.displayWaterBodyName).font(.system(size: 17)).foregroundStyle(.white)
                 Text(station.locationSubtitle.isEmpty
                      ? station.waterBodyType.displayName
                      : "\(station.locationSubtitle) · \(station.waterBodyType.displayName)")

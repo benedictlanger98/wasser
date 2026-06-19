@@ -15,6 +15,12 @@ struct WaterDetailView: View {
             legibilityOverlay
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
+                    if let alert = viewModel.conditions?.weather?.alerts.first {
+                        WeatherAlertBanner(alert: alert)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 56)
+                            .padding(.bottom, 2)
+                    }
                     hero
                     Color.clear.frame(height: 118) // let the water show through
                     if let conditions = viewModel.conditions {
@@ -49,10 +55,14 @@ struct WaterDetailView: View {
 
     // MARK: Hero
 
+    private var hasAlert: Bool {
+        !(viewModel.conditions?.weather?.alerts.isEmpty ?? true)
+    }
+
     private var hero: some View {
         let c = viewModel.conditions
         return VStack(spacing: 2) {
-            Text(viewModel.station.waterBodyName)
+            Text(viewModel.station.displayWaterBodyName)
                 .font(.system(size: 32, weight: .medium))
             if !viewModel.station.locationSubtitle.isEmpty {
                 Text(viewModel.station.locationSubtitle)
@@ -65,7 +75,7 @@ struct WaterDetailView: View {
             }
             Text(conditionText).font(.system(size: 21, weight: .medium))
             if c?.daily.isEmpty == false {
-                Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
+                Text("H: \(maxMin.hi)°  T: \(maxMin.lo)°")
                     .font(.system(size: 18, weight: .semibold)).opacity(0.92)
             }
             if let air = c?.weather?.temperature {
@@ -78,17 +88,16 @@ struct WaterDetailView: View {
         }
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.28), radius: 18, y: 1)
-        .padding(.top, 78)
+        .padding(.top, hasAlert ? 16 : 78)
         .padding(.horizontal, 20)
     }
 
+    /// Water-focused condition line: swimming comfort plus the temperature
+    /// trend, e.g. "Angenehm · steigend". Falls back to the comfort rating alone
+    /// when the trend is steady or no conditions are loaded yet.
     private var conditionText: String {
-        if let weather = viewModel.conditions?.weather { return weather.conditionDescription }
-        switch viewModel.station.waterBodyType {
-        case .river: return "Strömung mäßig"
-        case .sea:   return "Leichte Brandung"
-        case .lake:  return "Klar · Ruhig"
-        }
+        guard let c = viewModel.conditions else { return "" }
+        return c.trend == .steady ? c.comfort.rating : "\(c.comfort.rating) · \(c.trend.label)"
     }
 
     private var maxMin: (hi: String, lo: String) {
@@ -115,16 +124,18 @@ struct WaterDetailView: View {
                          gust: c.weather?.windGust ?? 0,
                          compass: c.weather?.windCompass ?? "–",
                          degrees: c.weather?.windDirectionDegrees ?? 0)
-                QualityCard(quality: c.quality)
+                BadehinweisCard(comfort: c.comfort, waterTemperature: c.waterTemperature)
                 if let marine = c.marine {
                     WaveCard(marine: marine)
                     TideCard(marine: marine)
                 }
-                if c.station.waterBodyType == .river, let discharge = c.discharge {
-                    AbflussCard(discharge: discharge)
+                // Discharge for rivers; water level wherever the station gauges
+                // it (rivers and the few lakes that report a level).
+                if let discharge = c.discharge {
+                    AbflussCard(discharge: discharge, annualMean: c.dischargeAnnualMean)
                 }
-                if c.station.waterBodyType == .lake, let level = c.waterLevel {
-                    WasserstandCard(level: level)
+                if let level = c.waterLevel {
+                    WasserstandCard(level: level, annualMean: c.waterLevelAnnualMean)
                 }
                 SunriseCard(sunrise: c.weather?.sunrise, sunset: c.weather?.sunset)
             }
