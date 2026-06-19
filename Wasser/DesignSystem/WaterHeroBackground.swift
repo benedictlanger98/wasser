@@ -18,7 +18,7 @@ struct WaterHeroBackground: View {
     @State private var start = Date()
 
     var body: some View {
-        TimelineView(.animation(paused: !animated)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animated)) { timeline in
             let elapsed = timeline.date.timeIntervalSince(start)
             let t = Float(elapsed * (0.85 + 0.3 * seed) + seed * 50)
             GeometryReader { geo in

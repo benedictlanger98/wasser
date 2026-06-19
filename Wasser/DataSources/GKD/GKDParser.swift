@@ -89,6 +89,23 @@ enum GKDParser {
         return result
     }
 
+    /// Parses a GKD "Jahresgrafik"/Tageswerte table whose rows are
+    /// `Datum | Mittel | Maximum | Minimum` at daily resolution (date only, no
+    /// time). Verified live 2026-06.
+    static func parseDailyTable(html: String) -> [DailyAggregate] {
+        var result: [DailyAggregate] = []
+        for rowHTML in tagContents(of: "tr", in: html) {
+            let cells = tagContents(of: "td", in: rowHTML).map { stripTags($0) }
+            guard cells.count >= 4,
+                  let date = germanDate(cells[0]),
+                  let mean = germanDouble(cells[1]) else { continue }
+            let high = germanDouble(cells[2]) ?? mean
+            let low = germanDouble(cells[3]) ?? mean
+            result.append(DailyAggregate(date: date, mean: mean, high: high, low: low))
+        }
+        return result
+    }
+
     // MARK: - Lightweight HTML helpers
 
     /// Returns the inner HTML of every `<tag ...>...</tag>` occurrence.
@@ -154,6 +171,19 @@ enum GKDParser {
         formatter.dateFormat = "dd.MM.yyyy HH:mm"
         return formatter
     }()
+
+    private static let germanDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.timeZone = TimeZone(identifier: "Europe/Berlin")
+        formatter.dateFormat = "dd.MM.yyyy"
+        return formatter
+    }()
+
+    /// Parses a date-only German timestamp ("19.06.2026").
+    static func germanDate(_ string: String) -> Date? {
+        germanDayFormatter.date(from: string.trimmingCharacters(in: .whitespaces))
+    }
 
     static func germanDateTime(_ string: String) -> Date? {
         // Verified live 2026-06: GKD renders timestamps as

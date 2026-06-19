@@ -40,13 +40,18 @@ struct DayTrend: Identifiable, Hashable, Sendable {
 struct LocationConditions: Sendable {
     let station: MeasurementStation
     let waterTemperature: Double
-    /// Recent hourly water temperatures (oldest → newest, "now" last).
+    /// Recent water temperatures at 15-min resolution (oldest → newest).
     let hourly: [Measurement]
+    /// Daily trend, newest first (today at index 0).
     let daily: [DayTrend]
     let weather: WeatherSnapshot?
     let quality: WaterQualityInfo
     let marine: MarineInfo?
     let flow: FlowInfo?
+    /// Latest water level (Wasserstand), shown for lakes.
+    let waterLevel: Measurement?
+    /// Latest discharge (Abfluss), shown for rivers.
+    let discharge: Measurement?
 
     var theme: WaterTheme { WaterTheme.forType(station.waterBodyType) }
 }

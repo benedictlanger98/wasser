@@ -82,12 +82,13 @@ struct SavedLocationsListView: View {
 struct SavedLocationCard: View {
     @EnvironmentObject private var repository: WaterRepository
     let station: MeasurementStation
-    @State private var conditions: LocationConditions?
+    @State private var waterTemp: Double?
+    @State private var today: DailyAggregate?
 
     /// Warmth (0 cold … 1 warm) from the current water temperature, used to tint
     /// the card; defaults to neutral until the value loads.
     private var warmth: Double {
-        guard let t = conditions?.waterTemperature else { return 0.5 }
+        guard let t = waterTemp else { return 0.5 }
         return min(1, max(0, (t - 8) / 20))
     }
     private var theme: WaterTheme {
@@ -103,17 +104,20 @@ struct SavedLocationCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading) {
                     Text(station.waterBodyName).font(.system(size: 23, weight: .semibold))
-                    Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
+                    if !station.locationSubtitle.isEmpty {
+                        Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
+                    }
                     Spacer()
                     Text(conditionText).font(.system(size: 14, weight: .medium)).opacity(0.95)
                 }
                 Spacer()
                 VStack(alignment: .trailing) {
-                    Text("\(Fmt.f0(conditions?.waterTemperature ?? 0))°")
-                        .font(.system(size: 50, weight: .ultraLight))
+                    Text("\(Fmt.f0(waterTemp ?? 0))°")
+                        .font(.system(size: 50, weight: .light))
                     Spacer()
-                    if let mm = maxMin {
-                        Text("Max.\(mm.hi)° Min.\(mm.lo)°").font(.system(size: 13, weight: .semibold)).opacity(0.92)
+                    if let today {
+                        Text("Max.\(Fmt.f0(today.high))° Min.\(Fmt.f0(today.low))°")
+                            .font(.system(size: 13, weight: .semibold)).opacity(0.92)
                     }
                 }
             }
@@ -125,9 +129,12 @@ struct SavedLocationCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
         .task(id: station.id) {
-            let vm = StationDetailViewModel(station: station, repository: repository)
-            await vm.load()
-            conditions = vm.conditions
+            // The card only needs the current value and today's max/min — fetch
+            // those directly rather than the full detail (no 15-min series).
+            async let conditions = try? repository.conditions(for: station)
+            async let trend = try? repository.dailyTrend(for: station, parameter: .waterTemperature, days: 1)
+            waterTemp = (await conditions)?.waterTemperature?.value
+            today = (await trend)?.first
         }
     }
 
@@ -138,32 +145,29 @@ struct SavedLocationCard: View {
         case .lake:  return "Klar · Ruhig"
         }
     }
-
-    private var maxMin: (hi: String, lo: String)? {
-        let all = (conditions?.daily ?? []).flatMap { [$0.low, $0.high] }
-        guard let hi = all.max(), let lo = all.min() else { return nil }
-        return (Fmt.f0(hi), Fmt.f0(lo))
-    }
 }
 
-/// Slow diagonal light shimmer used on the cards. `seed` varies the speed,
-/// origin and travel so neighbouring cards don't shimmer in unison.
+/// A light diagonal sheen sweeping across the card. Cheap (a single clipped
+/// linear gradient, no blur/soft-light), and `seed` varies the cadence so
+/// neighbouring cards don't sweep in unison.
 private struct ShimmerOverlay: View {
     var seed: Double = 0.5
-    @State private var phase: CGFloat = -1
+    @State private var phase: CGFloat = 0
+
     var body: some View {
         GeometryReader { geo in
-            let duration = 7.0 + seed * 6.0
-            RadialGradient(colors: [.white.opacity(0.30), .clear],
-                           center: .init(x: 0.2 + seed * 0.45, y: 0.18),
-                           startRadius: 0, endRadius: geo.size.width * (0.6 + 0.3 * seed))
-                .blendMode(.softLight)
-                .offset(x: phase * geo.size.width * 0.3, y: phase * geo.size.width * 0.05)
+            let w = geo.size.width
+            LinearGradient(colors: [.clear, .white.opacity(0.16), .clear],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+                .frame(width: w * 0.55)
+                .offset(x: -w * 0.8 + phase * w * 1.6)
+                .blendMode(.plusLighter)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
+                    withAnimation(.linear(duration: 6.0 + seed * 4.0).repeatForever(autoreverses: false)) {
                         phase = 1
                     }
                 }
         }
+        .allowsHitTesting(false)
     }
 }

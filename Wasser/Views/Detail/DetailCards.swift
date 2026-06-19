@@ -2,54 +2,84 @@ import SwiftUI
 
 // MARK: - Hourly water temperature
 
-/// STÜNDLICHE WASSERTEMPERATUR — horizontally scrolling bars.
+/// WASSERTEMPERATUR HEUTE — a line chart of the recent 15-minute series.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
 
     private var bounds: (min: Double, max: Double) {
         let values = hourly.map(\.value)
-        let lo = values.min() ?? 0, hi = values.max() ?? 1
+        let lo = (values.min() ?? 0) - 0.3
+        let hi = (values.max() ?? 1) + 0.3
         return (lo, hi > lo ? hi : lo + 1)
     }
 
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 0) {
-                Text("STÜNDLICHE WASSERTEMPERATUR")
-                    .font(.system(size: 13, weight: .semibold)).tracking(0.4)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .padding(.bottom, 12)
-                Divider().overlay(Color.white.opacity(0.14))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(Array(hourly.enumerated()), id: \.offset) { index, m in
-                            bar(for: m, isNow: index == hourly.count - 1)
-                        }
+                HStack(alignment: .firstTextBaseline) {
+                    Text("WASSERTEMPERATUR HEUTE")
+                        .font(.system(size: 13, weight: .semibold)).tracking(0.4)
+                        .foregroundStyle(.white.opacity(0.62))
+                    Spacer()
+                    if let now = hourly.last {
+                        Text("\(Fmt.f1(now.value))°")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                     }
-                    .padding(.top, 14)
+                }
+                .padding(.bottom, 12)
+                Divider().overlay(Color.white.opacity(0.14))
+                if hourly.count >= 2 {
+                    chart.padding(.top, 16)
+                } else {
+                    Text("Keine Verlaufsdaten verfügbar")
+                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.6))
+                        .padding(.top, 16)
                 }
             }
         }
     }
 
-    private func bar(for m: Measurement, isNow: Bool) -> some View {
+    private var chart: some View {
+        let pts = hourly
         let (lo, hi) = bounds
-        let height = 18 + (m.value - lo) / (hi - lo) * 46
-        return VStack(spacing: 9) {
-            Text("\(Fmt.f0(m.value))°").font(.system(size: 16, weight: .semibold))
-            ZStack(alignment: .bottom) {
-                Capsule().fill(Color.white.opacity(0.14)).frame(width: 6, height: 64)
-                Capsule().fill(LinearGradient(
-                    colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
-                             Color(red: 0.16, green: 0.65, blue: 0.77)],
-                    startPoint: .top, endPoint: .bottom))
-                    .frame(width: 6, height: height)
+        let span = hi - lo
+        return VStack(spacing: 8) {
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                let n = pts.count
+                func pos(_ i: Int) -> CGPoint {
+                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
+                            y: h - CGFloat((pts[i].value - lo) / span) * h)
+                }
+                ZStack {
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: h))
+                        for i in pts.indices { p.addLine(to: pos(i)) }
+                        p.addLine(to: CGPoint(x: w, y: h))
+                        p.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    Path { p in
+                        p.move(to: pos(0))
+                        for i in pts.indices.dropFirst() { p.addLine(to: pos(i)) }
+                    }
+                    .stroke(LinearGradient(colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
+                                                    Color(red: 0.16, green: 0.65, blue: 0.77)],
+                                           startPoint: .leading, endPoint: .trailing),
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    Circle().fill(.white).frame(width: 8, height: 8).position(pos(n - 1))
+                }
             }
-            Text(isNow ? "Jetzt" : Fmt.hour(m.timestamp))
-                .font(.system(size: 14, weight: .semibold)).opacity(0.78)
+            .frame(height: 92)
+            HStack {
+                Text(Fmt.time(pts.first!.timestamp))
+                Spacer()
+                Text("Jetzt")
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.7))
         }
-        .foregroundStyle(.white)
-        .frame(minWidth: 40)
     }
 }
 
@@ -298,6 +328,40 @@ struct TideCard: View {
             _ = midY
             return p
         }
+    }
+}
+
+// MARK: - Abfluss (river) / Wasserstand (lake)
+
+struct AbflussCard: View {
+    let discharge: Measurement
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 0) {
+                CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
+                Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light)).padding(.top, 8)
+                Text("m³/s").font(.system(size: 13)).opacity(0.72)
+                Text("Stand \(Fmt.time(discharge.timestamp))")
+                    .font(.system(size: 12)).opacity(0.6).padding(.top, 6)
+            }
+        }
+        .foregroundStyle(.white)
+    }
+}
+
+struct WasserstandCard: View {
+    let level: Measurement
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 0) {
+                CardHeader(title: "WASSERSTAND", systemImage: "ruler")
+                Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light)).padding(.top, 8)
+                Text("cm").font(.system(size: 13)).opacity(0.72)
+                Text("Stand \(Fmt.time(level.timestamp))")
+                    .font(.system(size: 12)).opacity(0.6).padding(.top, 6)
+            }
+        }
+        .foregroundStyle(.white)
     }
 }
 
