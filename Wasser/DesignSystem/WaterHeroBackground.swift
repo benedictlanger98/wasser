@@ -9,6 +9,9 @@ import SwiftUI
 struct WaterHeroBackground: View {
     let theme: WaterTheme
     var animated: Bool = true
+    /// Per-station 0..1 value: offsets the animation phase and nudges its speed
+    /// so two open detail screens of the same water type don't move in lockstep.
+    var seed: Double = 0
 
     /// Stable epoch so the shader's `time` stays small (Float precision) and the
     /// animation is continuous across body re-evaluations.
@@ -16,7 +19,8 @@ struct WaterHeroBackground: View {
 
     var body: some View {
         TimelineView(.animation(paused: !animated)) { timeline in
-            let t = Float(timeline.date.timeIntervalSince(start))
+            let elapsed = timeline.date.timeIntervalSince(start)
+            let t = Float(elapsed * (0.85 + 0.3 * seed) + seed * 50)
             GeometryReader { geo in
                 Rectangle()
                     .fill(.black)

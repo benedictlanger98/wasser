@@ -42,6 +42,15 @@ extension MeasurementStation {
         "\(dataSourceID).\(externalID)"
     }
 
+    /// Deterministic value in 0..1 derived from the station id, used to give
+    /// each saved card/hero a subtly different gradient hue and animation phase
+    /// so they don't all look identical. Stable across launches (FNV-1a hash).
+    var appearanceSeed: Double {
+        var hash: UInt64 = 1469598103934665603
+        for byte in id.utf8 { hash = (hash ^ UInt64(byte)) &* 1099511628211 }
+        return Double(hash % 10_000) / 10_000.0
+    }
+
     /// Location line shown under the water-body title on the hero and cards.
     /// Prefers the specific measuring point (Messstelle) with district context;
     /// the broad Regierungsbezirk ("Oberbayern") alone isn't informative.

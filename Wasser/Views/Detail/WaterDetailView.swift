@@ -11,7 +11,7 @@ struct WaterDetailView: View {
 
     var body: some View {
         ZStack {
-            WaterHeroBackground(theme: WaterTheme.forType(viewModel.station.waterBodyType))
+            WaterHeroBackground(theme: heroTheme, seed: viewModel.station.appearanceSeed)
             legibilityOverlay
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -25,6 +25,14 @@ struct WaterDetailView: View {
             }
         }
         .task { await viewModel.load() }
+    }
+
+    /// Per-station themed hero: base water-type palette, varied by the station's
+    /// seed and the current water temperature (warmer water → warmer tint).
+    private var heroTheme: WaterTheme {
+        let warmth = viewModel.conditions.map { min(1, max(0, ($0.waterTemperature - 8) / 20)) } ?? 0.5
+        return WaterTheme.forType(viewModel.station.waterBodyType)
+            .varied(seed: viewModel.station.appearanceSeed, warmth: warmth)
     }
 
     private var legibilityOverlay: some View {

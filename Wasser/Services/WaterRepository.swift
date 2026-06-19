@@ -139,6 +139,26 @@ final class WaterRepository: ObservableObject {
         return station
     }
 
+    /// Reorders saved stations (list drag-to-reorder). Offsets index into the
+    /// currently displayed `favoriteStations`; any saved ids that aren't
+    /// resolvable right now are preserved at the end.
+    func moveFavorite(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var displayed = favoriteStations.map(\.id)
+        displayed.move(fromOffsets: source, toOffset: destination)
+        let extras = favoriteOrder.filter { !displayed.contains($0) }
+        favoriteOrder = displayed + extras
+        saveFavorites()
+    }
+
+    /// Removes saved stations at the given displayed offsets (swipe-to-delete).
+    func removeFavorites(atOffsets offsets: IndexSet) {
+        let displayed = favoriteStations.map(\.id)
+        let removeIDs = Set(offsets.compactMap { displayed.indices.contains($0) ? displayed[$0] : nil })
+        favoriteIDs.subtract(removeIDs)
+        favoriteOrder.removeAll { removeIDs.contains($0) }
+        saveFavorites()
+    }
+
     private func loadFavorites() {
         guard let data = UserDefaults.standard.data(forKey: favoritesKey),
               let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
