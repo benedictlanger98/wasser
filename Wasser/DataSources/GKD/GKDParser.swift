@@ -33,16 +33,21 @@ enum GKDParser {
 
             let link = firstHref(in: rowHTML)
             let detailURL = link.flatMap { URL(string: $0, relativeTo: baseURL)?.absoluteURL }
+            // Columns (verified live 2026-06): Messstelle | Gewässer | Lkr. |
+            // Datum | <value>. The current value is the right-most numeric cell
+            // (the date cell never parses as a number), and the Landkreis
+            // abbreviation in column 3 is the only region hint the table gives.
             let stationName = stripTags(cells[0])
             let waterBodyName = cells.count > 1 ? stripTags(cells[1]) : ""
-            let value = cells.compactMap { germanDouble(stripTags($0)) }.first
+            let district = cells.count > 2 ? stripTags(cells[2]) : ""
+            let value = cells.reversed().compactMap { germanDouble(stripTags($0)) }.first
 
             guard !stationName.isEmpty else { continue }
             rows.append(OverviewRow(stationName: stationName,
                                     waterBodyName: waterBodyName,
                                     detailURL: detailURL,
                                     currentValue: value,
-                                    region: nil))
+                                    region: district.isEmpty ? nil : district))
         }
         return rows
     }
@@ -146,6 +151,14 @@ enum GKDParser {
     }()
 
     static func germanDateTime(_ string: String) -> Date? {
-        germanDateFormatter.date(from: string.trimmingCharacters(in: .whitespaces))
+        // Verified live 2026-06: GKD renders timestamps as
+        // "dd.MM.yyyy HH:mm Uhr". Strip the trailing "Uhr" label (and any
+        // surrounding whitespace) so the formatter gets an exact match —
+        // otherwise every row is silently dropped.
+        var cleaned = string.trimmingCharacters(in: .whitespaces)
+        if cleaned.hasSuffix("Uhr") {
+            cleaned = String(cleaned.dropLast(3)).trimmingCharacters(in: .whitespaces)
+        }
+        return germanDateFormatter.date(from: cleaned)
     }
 }

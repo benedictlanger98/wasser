@@ -45,26 +45,42 @@ WeatherProvider (protocol)
 - **Parameters** — `MeasurementParameter` is the single place that defines
   units, symbols and formatting; new quantities (pH, oxygen, …) drop in here.
 
-## ⚠️ Scraper assumptions to verify
+## Scraper — verified against live GKD (2026-06-19)
 
-The build sandbox cannot reach `www.gkd.bayern.de` (blocked by the network
-egress allowlist) and there is no macOS/Swift toolchain here, so the scraper was
-written to GKD's documented/observed structure and **has not been run against
-live data**. Verify and adjust, in order of likelihood:
+The scraper was originally written to GKD's documented/observed structure
+without live access. It has now been verified against `www.gkd.bayern.de` and
+the wrong assumptions corrected. Findings, in the order they were checked:
 
-1. **Overview table columns** (`GKDParser.parseOverviewTable`) — confirm which
-   `<td>` holds the station name vs. water body vs. current value.
-2. **Detail / data URLs** (`GKDEndpoints.messwerte`, `.download`) — confirm the
-   `messwerte` tab path and whether a CSV download endpoint + query params exist.
-   The download path/params are a best guess.
-3. **CSV / table format** (`GKDParser.parseCSV`, `.parseMeasurementTable`) —
-   confirm separator (`;`), German decimal comma, and `dd.MM.yyyy HH:mm`
-   timestamps in `Europe/Berlin`.
-4. **Coordinates** — the overview table has no lat/lon; scraped stations get
-   `(0,0)` and should be enriched from the detail page or matched to the seed
-   catalogue. The seed coordinates are approximate town/lake centroids.
+1. **Overview table columns** (`GKDParser.parseOverviewTable`) — ✅ confirmed
+   five columns: `Messstelle | Gewässer | Lkr. | Datum | Wassertemperatur [°C]`.
+   Station name (col 0) and water body (col 1) were right. **Fixed:** the
+   current value is now read from the right-most numeric cell (not the first
+   numeric cell anywhere in the row), and the `Lkr.` district abbreviation
+   (col 2) is captured as the station's `region` instead of `nil`.
+2. **Detail / data URLs** (`GKDEndpoints`) — overview links already point
+   straight at `.../<place-slug>-<nr>/messwerte?method=tabellen`. **Fixed:**
+   `messwerte(for:)` now uses that captured URL as-is (the old code rebuilt the
+   path and dropped the `?method=tabellen` query). The CSV download lives at the
+   sibling `.../<place-slug>-<nr>/download`, **not** `.../messwerte/download` —
+   **fixed**. ⚠️ The download itself is a **POST form gated by mandatory
+   terms/privacy checkboxes** (ISO-8859-1 CSV; fixed periods only; custom ranges
+   delivered async by e-mail), so the old `GET ?zr&beginn&ende` guess could
+   never have worked. `timeSeries` already falls back to scraping the rendered
+   table, which is the working path until the POST flow is implemented.
+3. **Table / timestamp format** (`GKDParser`) — the messwerte table is two
+   columns (`Datum | value`) ordered **newest-first**, with timestamps rendered
+   as `dd.MM.yyyy HH:mm **Uhr**`. **Fixed (critical):** `germanDateTime` strips
+   the trailing `Uhr` — without it every row failed to parse and was silently
+   dropped. **Fixed:** `latestValue` now takes the max-timestamp row, not `.last`
+   (which returned the *oldest* visible reading). Separator `;`, German decimal
+   comma, and `Europe/Berlin` were correct; the transport already falls back to
+   ISO-8859-1 decoding.
+4. **Coordinates** — still unverified: the overview table has no lat/lon, so
+   scraped stations get `(0,0)` and should be enriched from the detail page or
+   matched to the seed catalogue. The seed coordinates are approximate
+   town/lake centroids.
 
-Until verified, `GKDStationCatalog` guarantees the library is never empty, and
+`GKDStationCatalog` still guarantees the library is never empty, and
 `MockWaterDataSource` powers previews offline.
 
 ## Project format
@@ -100,4 +116,5 @@ Per-type colour themes (`WaterTheme`) are ported verbatim from the mock.
 - **WeatherKit** needs the capability/entitlement on the App ID and a paid
   developer account to return data at runtime; without it the weather cards
   show "–". Previews use `MockWeatherProvider`.
-- The scraper assumptions in the section above still require live verification.
+- Scraper structure is now live-verified (see above); remaining work is station
+  **coordinates** and wiring the GKD **download POST** form for long time series.
