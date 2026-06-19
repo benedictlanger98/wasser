@@ -60,7 +60,7 @@ struct HourlyTemperatureCard: View {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 let n = pts.count
-                func pos(_ i: Int) -> CGPoint {
+                let pos: (Int) -> CGPoint = { i in
                     CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
                             y: h - CGFloat((pts[i].value - lo) / span) * h)
                 }
