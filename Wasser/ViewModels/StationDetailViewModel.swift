@@ -56,10 +56,7 @@ final class StationDetailViewModel: ObservableObject {
             let recentCutoff = Date().addingTimeInterval(-11 * 86_400)
             let daily: [DayTrend] = aggregates
                 .filter { $0.date >= recentCutoff }
-                .map { agg in
-                    DayTrend(label: Fmt.isToday(agg.date) ? "Heute" : Fmt.weekdayShort(agg.date),
-                             low: agg.low, high: agg.high)
-                }
+                .map { DayTrend(date: $0.date, low: $0.low, high: $0.high) }
 
             conditions = LocationConditions(
                 station: station,

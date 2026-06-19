@@ -27,10 +27,10 @@ struct FlowInfo: Hashable, Sendable {
     let direction: String
 }
 
-/// One bar in the 10-day trend.
+/// One day in the 10-day trend.
 struct DayTrend: Identifiable, Hashable, Sendable {
     let id = UUID()
-    let label: String   // "Heute", "Mi", …
+    let date: Date
     let low: Double
     let high: Double
 }

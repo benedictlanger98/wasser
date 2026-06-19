@@ -73,10 +73,15 @@ struct HourlyTemperatureCard: View {
 struct DailyTrendCard: View {
     let days: [DayTrend]
 
-    private var bounds: (min: Double, max: Double) {
+    private let barGradient = LinearGradient(
+        colors: [Color(red: 0.37, green: 0.82, blue: 0.90), Color(red: 0.65, green: 0.95, blue: 0.82)],
+        startPoint: .leading, endPoint: .trailing)
+
+    private var xDomain: ClosedRange<Double> {
         let all = days.flatMap { [$0.low, $0.high] }
-        let lo = all.min() ?? 0, hi = all.max() ?? 1
-        return (lo, hi > lo ? hi : lo + 1)
+        let lo = (all.min() ?? 0) - 1.5
+        let hi = (all.max() ?? 1) + 1.5
+        return lo...(hi > lo ? hi : lo + 1)
     }
 
     var body: some View {
@@ -85,41 +90,46 @@ struct DailyTrendCard: View {
                 Text("10-TAGE-TREND")
                     .font(.system(size: 13, weight: .semibold)).tracking(0.4)
                     .foregroundStyle(.white.opacity(0.62))
-                    .padding(.bottom, 6)
-                ForEach(days) { day in
-                    row(day)
-                    if day.id != days.last?.id {
-                        Divider().overlay(Color.white.opacity(0.10))
-                    }
-                }
+                    .padding(.bottom, 12)
+                Divider().overlay(Color.white.opacity(0.14))
+                chart.padding(.top, 14)
             }
         }
     }
 
-    private func row(_ day: DayTrend) -> some View {
-        let (lo, hi) = bounds
-        let span = hi - lo
-        return HStack(spacing: 12) {
-            Text(day.label).font(.system(size: 17, weight: .semibold)).frame(width: 42, alignment: .leading)
-            Text("\(Fmt.f0(day.low))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
-            GeometryReader { geo in
-                let leading = (day.low - lo) / span * geo.size.width
-                let width = (day.high - day.low) / span * geo.size.width
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.15))
-                    Capsule().fill(LinearGradient(
-                        colors: [Color(red: 0.37, green: 0.82, blue: 0.90),
-                                 Color(red: 0.65, green: 0.95, blue: 0.82)],
-                        startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(6, width))
-                        .offset(x: leading)
+    private var chart: some View {
+        Chart(days) { day in
+            BarMark(
+                xStart: .value("Min", day.low),
+                xEnd: .value("Max", day.high),
+                y: .value("Tag", day.date, unit: .day),
+                height: .fixed(7)
+            )
+            .cornerRadius(4)
+            .foregroundStyle(barGradient)
+            .annotation(position: .leading, spacing: 8) {
+                Text("\(Fmt.f0(day.low))°")
+                    .font(.system(size: 15)).foregroundStyle(.white.opacity(0.6))
+            }
+            .annotation(position: .trailing, spacing: 8) {
+                Text("\(Fmt.f0(day.high))°")
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
+            }
+        }
+        .chartXScale(domain: xDomain)
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading, values: days.map(\.date)) { value in
+                if let date = value.as(Date.self) {
+                    AxisValueLabel {
+                        Text(Fmt.isToday(date) ? "Heute" : Fmt.weekdayShort(date))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
-            .frame(height: 6)
-            Text("\(Fmt.f0(day.high))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
         }
-        .foregroundStyle(.white)
-        .padding(.vertical, 9)
+        .frame(height: CGFloat(days.count) * 30)
     }
 }
 
