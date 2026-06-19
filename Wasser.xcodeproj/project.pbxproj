@@ -3,47 +3,20 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 77;
 	objects = {
-
-/* Begin PBXBuildFile section */
-		A10000001 /* WasserApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000001; };
-		A10000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000002; };
-		A10000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000003; };
-		A10000004 /* WaterBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000004; };
-		A10000005 /* TemperatureMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000005; };
-		A10000006 /* WaterTemperatureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000006; };
-		A10000007 /* MockDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000007; };
-		A10000008 /* LocationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000008; };
-		A10000009 /* LocationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000009; };
-		A10000010 /* TemperatureCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010; };
-		A10000011 /* Color+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000011; };
-		A10000012 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000012; };
-		A10000013 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000013; };
-		A10000014 /* TemperatureGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000014; };
-		A10000015 /* WaterBodyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000015; };
-		A10000016 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000016; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A30000001 /* Wasser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Wasser.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000001 /* WasserApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WasserApp.swift; sourceTree = "<group>"; };
-		A20000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		A20000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A20000004 /* WaterBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterBody.swift; sourceTree = "<group>"; };
-		A20000005 /* TemperatureMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureMeasurement.swift; sourceTree = "<group>"; };
-		A20000006 /* WaterTemperatureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterTemperatureService.swift; sourceTree = "<group>"; };
-		A20000007 /* MockDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDataProvider.swift; sourceTree = "<group>"; };
-		A20000008 /* LocationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationListView.swift; sourceTree = "<group>"; };
-		A20000009 /* LocationDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationDetailView.swift; sourceTree = "<group>"; };
-		A20000010 /* TemperatureCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureCardView.swift; sourceTree = "<group>"; };
-		A20000011 /* Color+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Extensions.swift"; sourceTree = "<group>"; };
-		A20000012 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
-		A20000013 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
-		A20000014 /* TemperatureGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureGraphView.swift; sourceTree = "<group>"; };
-		A20000015 /* WaterBodyRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterBodyRow.swift; sourceTree = "<group>"; };
-		A20000016 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A50000002 /* Wasser */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Wasser;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A40000001 /* Frameworks */ = {
@@ -62,77 +35,6 @@
 				A50000002 /* Wasser */,
 				A50000009 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		A50000002 /* Wasser */ = {
-			isa = PBXGroup;
-			children = (
-				A50000003 /* App */,
-				A50000004 /* Models */,
-				A50000005 /* Views */,
-				A50000006 /* Services */,
-				A50000007 /* Extensions */,
-				A20000003 /* Assets.xcassets */,
-			);
-			path = Wasser;
-			sourceTree = "<group>";
-		};
-		A50000003 /* App */ = {
-			isa = PBXGroup;
-			children = (
-				A20000001 /* WasserApp.swift */,
-				A20000002 /* ContentView.swift */,
-			);
-			path = App;
-			sourceTree = "<group>";
-		};
-		A50000004 /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				A20000004 /* WaterBody.swift */,
-				A20000005 /* TemperatureMeasurement.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		A50000005 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				A20000008 /* LocationListView.swift */,
-				A20000009 /* LocationDetailView.swift */,
-				A20000012 /* FavoritesView.swift */,
-				A50000008 /* Components */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		A50000006 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				A20000006 /* WaterTemperatureService.swift */,
-				A20000007 /* MockDataProvider.swift */,
-				A20000016 /* LocationManager.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		A50000007 /* Extensions */ = {
-			isa = PBXGroup;
-			children = (
-				A20000011 /* Color+Extensions.swift */,
-			);
-			path = Extensions;
-			sourceTree = "<group>";
-		};
-		A50000008 /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				A20000010 /* TemperatureCardView.swift */,
-				A20000013 /* SearchBar.swift */,
-				A20000014 /* TemperatureGraphView.swift */,
-				A20000015 /* WaterBodyRow.swift */,
-			);
-			path = Components;
 			sourceTree = "<group>";
 		};
 		A50000009 /* Products */ = {
@@ -158,6 +60,9 @@
 			);
 			dependencies = (
 			);
+			fileSystemSynchronizedGroups = (
+				A50000002 /* Wasser */,
+			);
 			name = Wasser;
 			productName = Wasser;
 			productReference = A30000001 /* Wasser.app */;
@@ -170,17 +75,17 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					A60000001 = {
-						CreatedOnToolsVersion = 15.0;
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
 			buildConfigurationList = A80000001 /* Build configuration list for PBXProject "Wasser" */;
-			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = en;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = de;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
@@ -202,7 +107,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000003 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,21 +117,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000001 /* WasserApp.swift in Sources */,
-				A10000002 /* ContentView.swift in Sources */,
-				A10000004 /* WaterBody.swift in Sources */,
-				A10000005 /* TemperatureMeasurement.swift in Sources */,
-				A10000006 /* WaterTemperatureService.swift in Sources */,
-				A10000007 /* MockDataProvider.swift in Sources */,
-				A10000008 /* LocationListView.swift in Sources */,
-				A10000009 /* LocationDetailView.swift in Sources */,
-				A10000010 /* TemperatureCardView.swift in Sources */,
-				A10000011 /* Color+Extensions.swift in Sources */,
-				A10000012 /* FavoritesView.swift in Sources */,
-				A10000013 /* SearchBar.swift in Sources */,
-				A10000014 /* TemperatureGraphView.swift in Sources */,
-				A10000015 /* WaterBodyRow.swift in Sources */,
-				A10000016 /* LocationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -296,7 +185,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Wasser;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wasser uses your location to show nearby water temperatures.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wasser nutzt deinen Standort, um Messstellen in der Nähe anzuzeigen.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -324,7 +213,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Wasser;
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wasser uses your location to show nearby water temperatures.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wasser nutzt deinen Standort, um Messstellen in der Nähe anzuzeigen.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
