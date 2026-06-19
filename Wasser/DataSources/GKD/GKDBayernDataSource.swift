@@ -50,18 +50,12 @@ struct GKDBayernDataSource: WaterDataSource {
             scraped = []
         }
 
-        // Prefer scraped stations (they carry real detail URLs *and* current
-        // values). Add seed entries only for water bodies the scrape didn't
-        // cover, so value-less placeholders never shadow a live station — the
-        // root cause of lakes showing 0°. Matching tolerates spacing/spelling
-        // differences ("Starnberger See" vs "StarnbergerSee").
+        // Scrape succeeded: return only the stations GKD actually serves. The
+        // seed catalogue is a pure offline fallback (used when the scrape yields
+        // nothing) — merging its uncovered entries here would surface lakes GKD
+        // doesn't measure (e.g. Walchensee) as permanent 0° cards.
         guard !scraped.isEmpty else { return seed }
-        let covered = Set(scraped.map { GKDBayernDataSource.waterKey($0.waterBodyName) })
-        var result = scraped
-        for station in seed where !covered.contains(GKDBayernDataSource.waterKey(station.waterBodyName)) {
-            result.append(station)
-        }
-        return result.sorted { $0.waterBodyName.localizedCompare($1.waterBodyName) == .orderedAscending }
+        return scraped.sorted { $0.waterBodyName.localizedCompare($1.waterBodyName) == .orderedAscending }
     }
 
     private func scrapedStations(category: GKDEndpoints.Category,
@@ -151,13 +145,6 @@ struct GKDBayernDataSource: WaterDataSource {
     }
 
     // MARK: - Matching / id helpers
-
-    /// Normalised water-body key (umlaut-folded, alphanumerics only) used to
-    /// decide whether the live scrape already covers a seed entry. Stripping
-    /// hyphens/spaces makes "Starnberger See" and "StarnbergerSee" compare equal.
-    static func waterKey(_ name: String) -> String {
-        slug(name).replacingOccurrences(of: "-", with: "")
-    }
 
     /// Extracts the trailing Messstellennummer from a GKD detail URL path
     /// (".../<place-slug>-<number>/messwerte").

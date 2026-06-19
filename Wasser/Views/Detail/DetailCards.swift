@@ -1,16 +1,20 @@
 import SwiftUI
+import Charts
 
 // MARK: - Hourly water temperature
 
-/// WASSERTEMPERATUR HEUTE — a line chart of the recent 15-minute series.
+/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a Swift Charts
+/// line + area chart (smooth interpolation, hourly grid).
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
 
-    private var bounds: (min: Double, max: Double) {
+    private let line = Color(red: 0.46, green: 0.86, blue: 1.0)
+
+    private var yDomain: ClosedRange<Double> {
         let values = hourly.map(\.value)
         let lo = (values.min() ?? 0) - 0.3
         let hi = (values.max() ?? 1) + 0.3
-        return (lo, hi > lo ? hi : lo + 1)
+        return lo...(hi > lo ? hi : lo + 1)
     }
 
     var body: some View {
@@ -28,58 +32,39 @@ struct HourlyTemperatureCard: View {
                 }
                 .padding(.bottom, 12)
                 Divider().overlay(Color.white.opacity(0.14))
-                if hourly.count >= 2 {
-                    chart.padding(.top, 16)
-                } else {
-                    Text("Keine Verlaufsdaten verfügbar")
-                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.6))
-                        .padding(.top, 16)
-                }
+                chart.padding(.top, 14)
             }
         }
     }
 
     private var chart: some View {
-        let pts = hourly
-        let (lo, hi) = bounds
-        let span = hi - lo
-        return VStack(spacing: 8) {
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                let n = pts.count
-                func pos(_ i: Int) -> CGPoint {
-                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
-                            y: h - CGFloat((pts[i].value - lo) / span) * h)
-                }
-                ZStack {
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: h))
-                        for i in pts.indices { p.addLine(to: pos(i)) }
-                        p.addLine(to: CGPoint(x: w, y: h))
-                        p.closeSubpath()
-                    }
-                    .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    Path { p in
-                        p.move(to: pos(0))
-                        for i in pts.indices.dropFirst() { p.addLine(to: pos(i)) }
-                    }
-                    .stroke(LinearGradient(colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
-                                                    Color(red: 0.16, green: 0.65, blue: 0.77)],
-                                           startPoint: .leading, endPoint: .trailing),
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    Circle().fill(.white).frame(width: 8, height: 8).position(pos(n - 1))
-                }
-            }
-            .frame(height: 92)
-            HStack {
-                Text(Fmt.time(pts.first!.timestamp))
-                Spacer()
-                Text("Jetzt")
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white.opacity(0.7))
+        Chart(hourly) { m in
+            AreaMark(x: .value("Zeit", m.timestamp),
+                     y: .value("Temperatur", m.value))
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(LinearGradient(colors: [line.opacity(0.30), .clear],
+                                                startPoint: .top, endPoint: .bottom))
+            LineMark(x: .value("Zeit", m.timestamp),
+                     y: .value("Temperatur", m.value))
+                .interpolationMethod(.catmullRom)
+                .foregroundStyle(line)
+                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
         }
+        .chartYScale(domain: yDomain)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
+                AxisGridLine().foregroundStyle(.white.opacity(0.08))
+                AxisValueLabel().foregroundStyle(.white.opacity(0.5)).font(.system(size: 11))
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .hour, count: 6)) {
+                AxisGridLine().foregroundStyle(.white.opacity(0.06))
+                AxisValueLabel(format: .dateTime.hour(.twoDigits(amPM: .omitted)))
+                    .foregroundStyle(.white.opacity(0.5)).font(.system(size: 11))
+            }
+        }
+        .frame(height: 124)
     }
 }
 

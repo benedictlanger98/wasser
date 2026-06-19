@@ -37,8 +37,9 @@ struct WaterDetailView: View {
 
     private var legibilityOverlay: some View {
         LinearGradient(stops: [
-            .init(color: .black.opacity(0.32), location: 0),
-            .init(color: .clear, location: 0.22),
+            .init(color: .black.opacity(0.45), location: 0),
+            .init(color: .black.opacity(0.12), location: 0.18),
+            .init(color: .clear, location: 0.42),
             .init(color: .clear, location: 0.60),
             .init(color: Color(red: 0, green: 0.04, blue: 0.06).opacity(0.45), location: 1)
         ], startPoint: .top, endPoint: .bottom)

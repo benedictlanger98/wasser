@@ -37,7 +37,7 @@ struct SavedLocationsListView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
-            Text("Wassertemperatur")
+            Text("Gewässer")
                 .font(.system(size: 34, weight: .bold)).tracking(0.3)
             Spacer()
             Button {
@@ -147,9 +147,10 @@ struct SavedLocationCard: View {
     }
 }
 
-/// A light diagonal sheen sweeping across the card. Cheap (a single clipped
-/// linear gradient, no blur/soft-light), and `seed` varies the cadence so
-/// neighbouring cards don't sweep in unison.
+/// A soft sheen sweeping horizontally across the card. The gradient fades to
+/// clear at its own left/right edges (so there are no hard band borders) and is
+/// full height (no top/bottom seam); `seed` varies the cadence so neighbouring
+/// cards don't sweep in unison.
 private struct ShimmerOverlay: View {
     var seed: Double = 0.5
     @State private var phase: CGFloat = 0
@@ -157,16 +158,20 @@ private struct ShimmerOverlay: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
-            LinearGradient(colors: [.clear, .white.opacity(0.16), .clear],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .frame(width: w * 0.55)
-                .offset(x: -w * 0.8 + phase * w * 1.6)
-                .blendMode(.plusLighter)
-                .onAppear {
-                    withAnimation(.linear(duration: 6.0 + seed * 4.0).repeatForever(autoreverses: false)) {
-                        phase = 1
-                    }
+            let bandW = w * 0.6
+            LinearGradient(stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .white.opacity(0.10), location: 0.5),
+                .init(color: .clear, location: 1)
+            ], startPoint: .leading, endPoint: .trailing)
+            .frame(width: bandW, height: geo.size.height)
+            .offset(x: phase * (w + bandW) - bandW)
+            .blendMode(.plusLighter)
+            .onAppear {
+                withAnimation(.linear(duration: 6.0 + seed * 4.0).repeatForever(autoreverses: false)) {
+                    phase = 1
                 }
+            }
         }
         .allowsHitTesting(false)
     }
