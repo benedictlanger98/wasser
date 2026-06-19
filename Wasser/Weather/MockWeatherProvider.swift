@@ -23,6 +23,12 @@ struct MockWeatherProvider: WeatherProvider {
             uvCategory: "Hoch",
             sunrise: sunrise,
             sunset: sunset,
+            alerts: [
+                WeatherAlertInfo(summary: "Amtliche Warnung vor Hitze",
+                                 severity: "Erheblich",
+                                 region: "Oberbayern",
+                                 symbolName: "exclamationmark.triangle.fill")
+            ],
             observedAt: now
         )
     }

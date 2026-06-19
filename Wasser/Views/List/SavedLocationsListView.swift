@@ -103,7 +103,7 @@ struct SavedLocationCard: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             HStack(alignment: .top) {
                 VStack(alignment: .leading) {
-                    Text(station.waterBodyName).font(.system(size: 23, weight: .semibold))
+                    Text(station.displayWaterBodyName).font(.system(size: 23, weight: .semibold))
                     if !station.locationSubtitle.isEmpty {
                         Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
                     }
@@ -116,7 +116,7 @@ struct SavedLocationCard: View {
                         .font(.system(size: 50, weight: .light))
                     Spacer()
                     if let today {
-                        Text("Max.\(Fmt.f0(today.high))° Min.\(Fmt.f0(today.low))°")
+                        Text("H:\(Fmt.f0(today.high))° T:\(Fmt.f0(today.low))°")
                             .font(.system(size: 13, weight: .semibold)).opacity(0.92)
                     }
                 }

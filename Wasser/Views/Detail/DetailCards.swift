@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Hourly water temperature
 
-/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a line chart.
+/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a line chart, with
+/// two horizontal reference gridlines and time markers along the bottom.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
 
@@ -39,6 +40,18 @@ struct HourlyTemperatureCard: View {
         }
     }
 
+    /// Two reference temperature lines at one-third and two-thirds height.
+    private var gridFractions: [Double] { [1.0 / 3.0, 2.0 / 3.0] }
+
+    /// 0:00, three interpolated markers, then "Jetzt".
+    private var timeLabels: [String] {
+        guard let start = hourly.first?.timestamp,
+              let end = hourly.last?.timestamp else { return [] }
+        let span = end.timeIntervalSince(start)
+        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.time(start.addingTimeInterval(span * $0)) }
+        return labels + ["Jetzt"]
+    }
+
     private var chart: some View {
         let pts = hourly
         let (lo, hi) = bounds
@@ -52,6 +65,21 @@ struct HourlyTemperatureCard: View {
                             y: h - CGFloat((pts[i].value - lo) / span) * h)
                 }
                 ZStack {
+                    // Reference gridlines + their temperature labels.
+                    ForEach(gridFractions, id: \.self) { frac in
+                        let y = h * CGFloat(frac)
+                        let value = hi - span * frac
+                        Path { p in
+                            p.move(to: CGPoint(x: 0, y: y))
+                            p.addLine(to: CGPoint(x: w, y: y))
+                        }
+                        .stroke(Color.white.opacity(0.16),
+                                style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+                        Text("\(Fmt.f0(value))°")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .position(x: w - 12, y: y - 7)
+                    }
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         for i in pts.indices { p.addLine(to: pos(i)) }
@@ -72,10 +100,11 @@ struct HourlyTemperatureCard: View {
                 }
             }
             .frame(height: 92)
-            HStack {
-                Text(Fmt.time(pts.first!.timestamp))
-                Spacer()
-                Text("Jetzt")
+            HStack(spacing: 0) {
+                ForEach(Array(timeLabels.enumerated()), id: \.offset) { idx, label in
+                    Text(label)
+                    if idx != timeLabels.count - 1 { Spacer(minLength: 0) }
+                }
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.7))
@@ -149,7 +178,7 @@ struct AirWaterCard: View {
     let air: Double?
 
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "LUFT & WASSER", systemImage: "thermometer.variable.and.figure")
                 VStack(spacing: 9) {
@@ -158,6 +187,7 @@ struct AirWaterCard: View {
                 }
                 .padding(.top, 13)
                 Text(note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 9)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .foregroundStyle(.white)
@@ -185,11 +215,12 @@ struct UVCard: View {
     let category: String
 
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "UV-INDEX", systemImage: "sun.max")
                 Text("\(index)").font(.system(size: 34, weight: .light)).padding(.top, 8)
                 Text(category).font(.system(size: 19, weight: .medium))
+                Spacer(minLength: 8)
                 GeometryReader { geo in
                     let x = min(1, Double(index) / 11) * geo.size.width
                     ZStack(alignment: .leading) {
@@ -207,7 +238,6 @@ struct UVCard: View {
                     }
                 }
                 .frame(height: 11)
-                .padding(.top, 12)
             }
         }
         .foregroundStyle(.white)
@@ -223,7 +253,7 @@ struct WindCard: View {
     let degrees: Double
 
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "WIND", systemImage: "wind")
                 HStack(spacing: 12) {
@@ -258,22 +288,24 @@ struct WindCard: View {
     }
 }
 
-// MARK: - Water quality
+// MARK: - Badehinweis (swimming comfort, derived from real water temperature)
 
-struct QualityCard: View {
-    let quality: WaterQualityInfo
+struct BadehinweisCard: View {
+    let comfort: SwimComfort
+    let waterTemperature: Double
 
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "WASSERQUALITÄT", systemImage: "drop.fill")
-                Text(quality.rating).font(.system(size: 22, weight: .medium)).padding(.top, 8)
-                Text(quality.note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 4)
+                CardHeader(title: "BADEHINWEIS", systemImage: comfort.symbolName)
+                Text(comfort.rating).font(.system(size: 22, weight: .medium)).padding(.top, 8)
+                Text(comfort.note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 4)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text("Sichttiefe").font(.system(size: 13)).opacity(0.7)
-                    Text("\(Fmt.f1(quality.clarityMeters)) m").font(.system(size: 17, weight: .medium))
+                    Text("Wasser").font(.system(size: 13)).opacity(0.7)
+                    Text("\(Fmt.f1(waterTemperature))°").font(.system(size: 17, weight: .medium))
                 }
-                .padding(.top, 10)
             }
         }
         .foregroundStyle(.white)
@@ -285,7 +317,7 @@ struct QualityCard: View {
 struct WaveCard: View {
     let marine: MarineInfo
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "WELLENHÖHE", systemImage: "water.waves")
                 Text("\(Fmt.f1(marine.waveHeightMeters)) m").font(.system(size: 34, weight: .light)).padding(.top, 8)
@@ -299,17 +331,18 @@ struct WaveCard: View {
 struct TideCard: View {
     let marine: MarineInfo
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "GEZEITEN", systemImage: "water.waves.and.arrow.trianglehead.up")
                 TideWave().stroke(Color.white.opacity(0.55), lineWidth: 2)
                     .frame(height: 40).padding(.top, 10)
+                Spacer(minLength: 6)
                 HStack {
                     Text("Hochw. \(marine.nextHighTide)")
                     Spacer()
                     Text("Niedrigw. \(marine.nextLowTide)")
                 }
-                .font(.system(size: 12.5)).opacity(0.8).padding(.top, 6)
+                .font(.system(size: 12.5)).opacity(0.8)
             }
         }
         .foregroundStyle(.white)
@@ -335,18 +368,25 @@ struct TideCard: View {
     }
 }
 
-// MARK: - Abfluss (river) / Wasserstand (lake)
+// MARK: - Abfluss (river) / Wasserstand (lake + river)
 
 struct AbflussCard: View {
     let discharge: Measurement
+    let annualMean: Double?
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
                 Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light)).padding(.top, 8)
                 Text("m³/s").font(.system(size: 13)).opacity(0.72)
+                if let delta = AnnualDelta.text(value: discharge.value, mean: annualMean,
+                                                unit: "m³/s", oneDecimal: true) {
+                    Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
                 Text("Stand \(Fmt.time(discharge.timestamp))")
-                    .font(.system(size: 12)).opacity(0.6).padding(.top, 6)
+                    .font(.system(size: 12)).opacity(0.6)
             }
         }
         .foregroundStyle(.white)
@@ -355,17 +395,35 @@ struct AbflussCard: View {
 
 struct WasserstandCard: View {
     let level: Measurement
+    let annualMean: Double?
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "WASSERSTAND", systemImage: "ruler")
                 Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light)).padding(.top, 8)
                 Text("cm").font(.system(size: 13)).opacity(0.72)
+                if let delta = AnnualDelta.text(value: level.value, mean: annualMean,
+                                                unit: "cm", oneDecimal: false) {
+                    Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
                 Text("Stand \(Fmt.time(level.timestamp))")
-                    .font(.system(size: 12)).opacity(0.6).padding(.top, 6)
+                    .font(.system(size: 12)).opacity(0.6)
             }
         }
         .foregroundStyle(.white)
+    }
+}
+
+/// Formats a "± vs. annual mean" caption shared by the level/discharge cards.
+enum AnnualDelta {
+    static func text(value: Double, mean: Double?, unit: String, oneDecimal: Bool) -> String? {
+        guard let mean else { return nil }
+        let delta = value - mean
+        let magnitude = oneDecimal ? Fmt.f1(abs(delta)) : Fmt.f0(abs(delta))
+        let sign = delta >= 0 ? "+" : "−"
+        return "\(sign)\(magnitude) \(unit) ggü. Jahresmittel"
     }
 }
 
@@ -374,7 +432,7 @@ struct WasserstandCard: View {
 struct FlowCard: View {
     let flow: FlowInfo
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "STRÖMUNG", systemImage: "arrow.right.to.line")
                 Text(Fmt.f1(flow.speedMetersPerSecond)).font(.system(size: 34, weight: .light)).padding(.top, 8)
@@ -392,30 +450,35 @@ struct SunriseCard: View {
     let sunset: Date?
 
     var body: some View {
-        GlassCard {
+        GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "SONNENAUFGANG", systemImage: "sunrise")
                 Text(sunrise.map(Fmt.time) ?? "–")
                     .font(.system(size: 30, weight: .light)).padding(.top, 8)
-                SunArc().stroke(Color.white.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 1.5, dash: [2, 3]))
-                    .frame(height: 34).padding(.top, 8)
-                    .overlay(alignment: .bottom) {
-                        GeometryReader { geo in
-                            let frac = 0.66
-                            let x = frac * geo.size.width
-                            let y = geo.size.height - sin(.pi * frac) * geo.size.height
-                            Circle().fill(Color(red: 1.0, green: 0.88, blue: 0.54))
-                                .frame(width: 8, height: 8)
-                                .position(x: x, y: y)
-                        }
-                        .frame(height: 34)
-                    }
+                Spacer(minLength: 12)
+                arc
+                Spacer(minLength: 12)
                 Text("Sonnenuntergang: \(sunset.map(Fmt.time) ?? "–")")
                     .font(.system(size: 12.5)).opacity(0.78)
             }
         }
         .foregroundStyle(.white)
+    }
+
+    private var arc: some View {
+        SunArc().stroke(Color.white.opacity(0.3),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [2, 3]))
+            .frame(height: 28)
+            .overlay {
+                GeometryReader { geo in
+                    let frac = 0.66
+                    let x = frac * geo.size.width
+                    let y = geo.size.height - sin(.pi * frac) * geo.size.height
+                    Circle().fill(Color(red: 1.0, green: 0.88, blue: 0.54))
+                        .frame(width: 8, height: 8)
+                        .position(x: x, y: y)
+                }
+            }
     }
 
     private struct SunArc: Shape {
@@ -426,5 +489,38 @@ struct SunriseCard: View {
                            control: CGPoint(x: rect.midX, y: -rect.maxY))
             return p
         }
+    }
+}
+
+// MARK: - Severe-weather warning banner
+
+struct WeatherAlertBanner: View {
+    let alert: WeatherAlertInfo
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: alert.symbolName)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.82, blue: 0.3))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(alert.summary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                let detail = [alert.region, alert.severity].compactMap { $0 }.joined(separator: " · ")
+                if !detail.isEmpty {
+                    Text(detail).font(.system(size: 12.5)).opacity(0.8)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial.opacity(0.85),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color(red: 0.55, green: 0.32, blue: 0.05).opacity(0.55),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(Color(red: 1.0, green: 0.82, blue: 0.3).opacity(0.4), lineWidth: 0.5))
     }
 }

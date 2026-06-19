@@ -51,10 +51,26 @@ extension MeasurementStation {
         return Double(hash % 10_000) / 10_000.0
     }
 
+    /// Strips a GKD disambiguation suffix joined by an underscore, e.g.
+    /// "Gmund_Tegernsee" → "Gmund". GKD appends `_<water body>` to some station
+    /// names; everything from the first underscore on is dropped for display.
+    private static func displayTrim(_ string: String) -> String {
+        guard let underscore = string.firstIndex(of: "_") else { return string }
+        let head = String(string[..<underscore]).trimmingCharacters(in: .whitespaces)
+        return head.isEmpty ? string : head
+    }
+
+    /// Station name for display, with any `_<suffix>` removed.
+    var displayName: String { Self.displayTrim(name) }
+
+    /// Water-body name for display, with any `_<suffix>` removed.
+    var displayWaterBodyName: String { Self.displayTrim(waterBodyName) }
+
     /// Location line shown small under the (big) water-body title: the specific
     /// measuring point (Messstelle). District abbreviations are intentionally
     /// omitted. Empty when the Messstelle is just the water-body name again.
     var locationSubtitle: String {
-        name == waterBodyName ? "" : name
+        let name = displayName
+        return name == displayWaterBodyName ? "" : name
     }
 }
