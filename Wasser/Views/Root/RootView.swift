@@ -63,10 +63,8 @@ struct RootView: View {
     }
 
     private var bottomBar: some View {
-        HStack {
-            // Balances the trailing list button so the page dots stay centred.
-            Color.clear.frame(width: 24, height: 24)
-            Spacer()
+        ZStack {
+            // Page dots, centred independent of the trailing button width.
             HStack(spacing: 9) {
                 ForEach(repository.favoriteStations) { station in
                     Circle()
@@ -77,21 +75,46 @@ struct RootView: View {
                         }
                 }
             }
-            Spacer()
-            Button { router.openList() } label: {
-                Image(systemName: "list.bullet").font(.system(size: 22))
+            HStack {
+                Spacer()
+                listButton
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 26)
-        .padding(.top, 14)
-        .frame(height: 88, alignment: .top)
+        .padding(.horizontal, 22)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
         .frame(maxWidth: .infinity)
         .background(
             LinearGradient(colors: [Color(red: 0, green: 0.03, blue: 0.05).opacity(0.55), .clear],
                            startPoint: .bottom, endPoint: .top)
                 .allowsHitTesting(false)
         )
+    }
+
+    private var listButton: some View {
+        Button { router.openList() } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+        }
+        .modifier(GlassCircle())
+    }
+}
+
+/// Applies a circular Liquid Glass background (iOS 26+), falling back to a
+/// frosted material on earlier systems.
+private struct GlassCircle: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+        }
     }
 }
 
