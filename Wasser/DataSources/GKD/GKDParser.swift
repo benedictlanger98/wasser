@@ -19,6 +19,7 @@ enum GKDParser {
         let waterBodyName: String
         let detailURL: URL?
         let currentValue: Double?
+        let timestamp: Date?
         let region: String?
     }
 
@@ -41,12 +42,16 @@ enum GKDParser {
             let waterBodyName = cells.count > 1 ? stripTags(cells[1]) : ""
             let district = cells.count > 2 ? stripTags(cells[2]) : ""
             let value = cells.reversed().compactMap { germanDouble(stripTags($0)) }.first
+            // The "Datum" column carries the observation time of the current
+            // value; it's the only timestamp the overview offers.
+            let timestamp = cells.lazy.compactMap { germanDateTime(stripTags($0)) }.first
 
             guard !stationName.isEmpty else { continue }
             rows.append(OverviewRow(stationName: stationName,
                                     waterBodyName: waterBodyName,
                                     detailURL: detailURL,
                                     currentValue: value,
+                                    timestamp: timestamp,
                                     region: district.isEmpty ? nil : district))
         }
         return rows

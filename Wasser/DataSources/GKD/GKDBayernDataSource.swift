@@ -1,5 +1,15 @@
 import Foundation
 
+/// Session cache of the latest water-temperature reading scraped from the GKD
+/// overview tables, keyed by station id. It is a reference type (actor) so it is
+/// shared across copies of the value-type `GKDBayernDataSource` and safe to
+/// mutate concurrently while the overview is scraped.
+actor GKDLatestStore {
+    private var values: [String: Measurement] = [:]
+    func set(_ measurement: Measurement, for id: String) { values[id] = measurement }
+    func value(for id: String) -> Measurement? { values[id] }
+}
+
 /// `WaterDataSource` backed by the Gewässerkundlicher Dienst Bayern
 /// (gkd.bayern.de). Maps scraped rows into the app's domain model. Weather is
 /// merged in by `WaterRepository`, keeping this source purely hydrological.
@@ -15,6 +25,9 @@ struct GKDBayernDataSource: WaterDataSource {
     /// When true, the network overview tables are scraped; otherwise only the
     /// bundled seed catalogue is returned (useful for previews / offline).
     private let useLiveCatalogue: Bool
+    /// Current values harvested from the overview tables during `fetchStations`,
+    /// reused by `fetchCurrentConditions` (the reliable source for lakes).
+    private let latestStore = GKDLatestStore()
 
     init(scraper: GKDScraper = GKDScraper(),
          useLiveCatalogue: Bool = true) {
@@ -37,22 +50,28 @@ struct GKDBayernDataSource: WaterDataSource {
             scraped = []
         }
 
-        // Prefer scraped stations (they carry real detail URLs); fall back to
-        // seed entries the scrape didn't cover so the library is never empty.
+        // Prefer scraped stations (they carry real detail URLs *and* current
+        // values). Add seed entries only for water bodies the scrape didn't
+        // cover, so value-less placeholders never shadow a live station — the
+        // root cause of lakes showing 0°. Matching tolerates spacing/spelling
+        // differences ("Starnberger See" vs "StarnbergerSee").
         guard !scraped.isEmpty else { return seed }
-        var byKey: [String: MeasurementStation] = [:]
-        for station in seed { byKey[matchKey(station)] = station }
-        for station in scraped { byKey[matchKey(station)] = station }
-        return byKey.values.sorted { $0.waterBodyName < $1.waterBodyName }
+        let covered = Set(scraped.map { GKDBayernDataSource.waterKey($0.waterBodyName) })
+        var result = scraped
+        for station in seed where !covered.contains(GKDBayernDataSource.waterKey(station.waterBodyName)) {
+            result.append(station)
+        }
+        return result.sorted { $0.waterBodyName.localizedCompare($1.waterBodyName) == .orderedAscending }
     }
 
     private func scrapedStations(category: GKDEndpoints.Category,
                                  type: WaterBodyType) async throws -> [MeasurementStation] {
         let rows = try await scraper.overview(category: category)
-        return rows.compactMap { row in
-            guard let detail = row.detailURL else { return nil }
+        var stations: [MeasurementStation] = []
+        for row in rows {
+            guard let detail = row.detailURL else { continue }
             let external = GKDBayernDataSource.externalID(from: detail) ?? GKDBayernDataSource.slug(detail.absoluteString)
-            return MeasurementStation(
+            let station = MeasurementStation(
                 id: MeasurementStation.makeID(dataSourceID: id, externalID: external),
                 externalID: external,
                 dataSourceID: id,
@@ -68,19 +87,48 @@ struct GKDBayernDataSource: WaterDataSource {
                     : [.waterTemperature],
                 detailURL: detail
             )
+            // Stash the current temperature from the overview so the detail/list
+            // screens have a real value even when the station's messwerte page
+            // carries no recent rows (true for the manually-read lake profiles).
+            if let value = row.currentValue {
+                await latestStore.set(
+                    Measurement(parameter: .waterTemperature,
+                                timestamp: row.timestamp ?? Date(),
+                                value: value),
+                    for: station.id)
+            }
+            stations.append(station)
         }
+        return stations
     }
 
     // MARK: - Conditions
 
     func fetchCurrentConditions(for station: MeasurementStation) async throws -> StationConditions {
         var latest: [MeasurementParameter: Measurement] = [:]
-        try await withThrowingTaskGroup(of: (MeasurementParameter, Measurement?).self) { group in
-            for parameter in station.availableParameters {
-                group.addTask { (parameter, try? await scraper.latestValue(for: station, parameter: parameter)) }
-            }
-            for try await (parameter, measurement) in group {
-                if let measurement { latest[parameter] = measurement }
+
+        // Water temperature: trust the value harvested from the overview table.
+        // It exists for every station (rivers and lakes alike), whereas lake
+        // messwerte pages are manually-read multi-depth profiles with no recent
+        // tabular rows to scrape.
+        if let overview = await latestStore.value(for: station.id) {
+            latest[.waterTemperature] = overview
+        }
+
+        // Fetch the remaining parameters (river level/discharge — and water
+        // temperature only if the overview didn't supply it) from the messwerte
+        // tables, which do render recent rows for those.
+        let toFetch = station.availableParameters.filter {
+            $0 != .waterTemperature || latest[.waterTemperature] == nil
+        }
+        if !toFetch.isEmpty {
+            try await withThrowingTaskGroup(of: (MeasurementParameter, Measurement?).self) { group in
+                for parameter in toFetch {
+                    group.addTask { (parameter, try? await scraper.latestValue(for: station, parameter: parameter)) }
+                }
+                for try await (parameter, measurement) in group {
+                    if let measurement { latest[parameter] = measurement }
+                }
             }
         }
         return StationConditions(stationID: station.id, latest: latest, weather: nil)
@@ -97,9 +145,11 @@ struct GKDBayernDataSource: WaterDataSource {
 
     // MARK: - Matching / id helpers
 
-    /// Normalised key used to reconcile seed and scraped entries.
-    private func matchKey(_ station: MeasurementStation) -> String {
-        GKDBayernDataSource.slug("\(station.waterBodyName)-\(station.name)")
+    /// Normalised water-body key (umlaut-folded, alphanumerics only) used to
+    /// decide whether the live scrape already covers a seed entry. Stripping
+    /// hyphens/spaces makes "Starnberger See" and "StarnbergerSee" compare equal.
+    static func waterKey(_ name: String) -> String {
+        slug(name).replacingOccurrences(of: "-", with: "")
     }
 
     /// Extracts the trailing Messstellennummer from a GKD detail URL path

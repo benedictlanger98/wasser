@@ -47,9 +47,17 @@ final class WaterRepository: ObservableObject {
     private func seedDefaultFavoritesIfNeeded() {
         guard favoriteIDs.isEmpty, !stations.isEmpty else { return }
         let preferred = ["Walchensee", "Isar", "Starnberger See", "Chiemsee", "Tegernsee"]
+        // Match on a normalised key (diacritics folded, non-alphanumerics
+        // dropped) so the scraped names ("StarnbergerSee") still resolve.
+        func key(_ s: String) -> String {
+            s.folding(options: .diacriticInsensitive, locale: .current)
+                .lowercased()
+                .filter { $0.isLetter || $0.isNumber }
+        }
         var seeded: [String] = []
         for name in preferred {
-            if let match = stations.first(where: { $0.waterBodyName == name }) {
+            let target = key(name)
+            if let match = stations.first(where: { key($0.waterBodyName) == target }) {
                 seeded.append(match.id)
             }
         }
@@ -129,6 +137,26 @@ final class WaterRepository: ObservableObject {
             saveFavorites()
         }
         return station
+    }
+
+    /// Reorders saved stations (list drag-to-reorder). Offsets index into the
+    /// currently displayed `favoriteStations`; any saved ids that aren't
+    /// resolvable right now are preserved at the end.
+    func moveFavorite(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var displayed = favoriteStations.map(\.id)
+        displayed.move(fromOffsets: source, toOffset: destination)
+        let extras = favoriteOrder.filter { !displayed.contains($0) }
+        favoriteOrder = displayed + extras
+        saveFavorites()
+    }
+
+    /// Removes saved stations at the given displayed offsets (swipe-to-delete).
+    func removeFavorites(atOffsets offsets: IndexSet) {
+        let displayed = favoriteStations.map(\.id)
+        let removeIDs = Set(offsets.compactMap { displayed.indices.contains($0) ? displayed[$0] : nil })
+        favoriteIDs.subtract(removeIDs)
+        favoriteOrder.removeAll { removeIDs.contains($0) }
+        saveFavorites()
     }
 
     private func loadFavorites() {

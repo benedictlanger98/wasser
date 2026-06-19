@@ -5,39 +5,54 @@ import SwiftUI
 struct SavedLocationsListView: View {
     @EnvironmentObject private var repository: WaterRepository
     @EnvironmentObject private var router: AppRouter
+    @State private var editMode: EditMode = .inactive
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-                    searchField
-                    VStack(spacing: 12) {
-                        ForEach(repository.favoriteStations) { station in
-                            SavedLocationCard(station: station)
-                                .environmentObject(repository)
-                                .onTapGesture { router.showDetail(station.id) }
-                        }
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                searchField
+                List {
+                    ForEach(repository.favoriteStations) { station in
+                        SavedLocationCard(station: station)
+                            .environmentObject(repository)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if editMode == .inactive { router.showDetail(station.id) }
+                            }
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
+                    .onMove { repository.moveFavorite(fromOffsets: $0, toOffset: $1) }
+                    .onDelete { repository.removeFavorites(atOffsets: $0) }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.editMode, $editMode)
             }
         }
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 14) {
             Text("Wassertemperatur")
                 .font(.system(size: 34, weight: .bold)).tracking(0.3)
             Spacer()
+            Button {
+                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+            } label: {
+                Image(systemName: editMode.isEditing ? "checkmark.circle.fill" : "arrow.up.arrow.down.circle")
+                    .font(.system(size: 24, weight: .regular))
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .disabled(repository.favoriteStations.isEmpty)
             Button { router.openSearch(fromList: true) } label: {
                 Image(systemName: "plus.circle")
                     .font(.system(size: 24, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
             }
-            .foregroundStyle(.white)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
@@ -69,18 +84,26 @@ struct SavedLocationCard: View {
     let station: MeasurementStation
     @State private var conditions: LocationConditions?
 
-    private var theme: WaterTheme { WaterTheme.forType(station.waterBodyType) }
+    /// Warmth (0 cold … 1 warm) from the current water temperature, used to tint
+    /// the card; defaults to neutral until the value loads.
+    private var warmth: Double {
+        guard let t = conditions?.waterTemperature else { return 0.5 }
+        return min(1, max(0, (t - 8) / 20))
+    }
+    private var theme: WaterTheme {
+        WaterTheme.forType(station.waterBodyType).varied(seed: station.appearanceSeed, warmth: warmth)
+    }
 
     var body: some View {
         ZStack {
-            theme.cardGradient
-            ShimmerOverlay()
+            theme.cardGradient(seed: station.appearanceSeed)
+            ShimmerOverlay(seed: station.appearanceSeed)
             LinearGradient(colors: [.black.opacity(0.28), .black.opacity(0.05), .black.opacity(0.18)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             HStack(alignment: .top) {
                 VStack(alignment: .leading) {
                     Text(station.waterBodyName).font(.system(size: 23, weight: .semibold))
-                    Text(station.region ?? station.name).font(.system(size: 13, weight: .medium)).opacity(0.9)
+                    Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
                     Spacer()
                     Text(conditionText).font(.system(size: 14, weight: .medium)).opacity(0.95)
                 }
@@ -123,17 +146,23 @@ struct SavedLocationCard: View {
     }
 }
 
-/// Slow diagonal light shimmer used on the cards.
+/// Slow diagonal light shimmer used on the cards. `seed` varies the speed,
+/// origin and travel so neighbouring cards don't shimmer in unison.
 private struct ShimmerOverlay: View {
+    var seed: Double = 0.5
     @State private var phase: CGFloat = -1
     var body: some View {
         GeometryReader { geo in
+            let duration = 7.0 + seed * 6.0
             RadialGradient(colors: [.white.opacity(0.30), .clear],
-                           center: .init(x: 0.3, y: 0.2), startRadius: 0, endRadius: geo.size.width * 0.7)
+                           center: .init(x: 0.2 + seed * 0.45, y: 0.18),
+                           startRadius: 0, endRadius: geo.size.width * (0.6 + 0.3 * seed))
                 .blendMode(.softLight)
-                .offset(x: phase * geo.size.width * 0.3)
+                .offset(x: phase * geo.size.width * 0.3, y: phase * geo.size.width * 0.05)
                 .onAppear {
-                    withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) { phase = 1 }
+                    withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
+                        phase = 1
+                    }
                 }
         }
     }
