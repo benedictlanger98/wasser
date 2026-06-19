@@ -1,20 +1,16 @@
 import SwiftUI
-import Charts
 
 // MARK: - Hourly water temperature
 
-/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a Swift Charts
-/// line + area chart (smooth interpolation, hourly grid).
+/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a line chart.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
 
-    private let line = Color(red: 0.46, green: 0.86, blue: 1.0)
-
-    private var yDomain: ClosedRange<Double> {
+    private var bounds: (min: Double, max: Double) {
         let values = hourly.map(\.value)
         let lo = (values.min() ?? 0) - 0.3
         let hi = (values.max() ?? 1) + 0.3
-        return lo...(hi > lo ? hi : lo + 1)
+        return (lo, hi > lo ? hi : lo + 1)
     }
 
     var body: some View {
@@ -32,40 +28,58 @@ struct HourlyTemperatureCard: View {
                 }
                 .padding(.bottom, 12)
                 Divider().overlay(Color.white.opacity(0.14))
-                chart.padding(.top, 14)
+                if hourly.count >= 2 {
+                    chart.padding(.top, 16)
+                } else {
+                    Text("Keine Verlaufsdaten verfügbar")
+                        .font(.system(size: 14)).foregroundStyle(.white.opacity(0.6))
+                        .padding(.top, 16)
+                }
             }
         }
     }
 
     private var chart: some View {
-claude/great-bell-4xe1y8
-        Chart(hourly) { m in
-            AreaMark(x: .value("Zeit", m.timestamp),
-                     y: .value("Temperatur", m.value))
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(LinearGradient(colors: [line.opacity(0.30), .clear],
-                                                startPoint: .top, endPoint: .bottom))
-            LineMark(x: .value("Zeit", m.timestamp),
-                     y: .value("Temperatur", m.value))
-                .interpolationMethod(.catmullRom)
-                .foregroundStyle(line)
-                .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-        }
-        .chartYScale(domain: yDomain)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
-                AxisGridLine().foregroundStyle(.white.opacity(0.08))
-                AxisValueLabel().foregroundStyle(.white.opacity(0.5)).font(.system(size: 11))
+        let pts = hourly
+        let (lo, hi) = bounds
+        let span = hi - lo
+        return VStack(spacing: 8) {
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                let n = pts.count
+                func pos(_ i: Int) -> CGPoint {
+                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
+                            y: h - CGFloat((pts[i].value - lo) / span) * h)
+                }
+                ZStack {
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: h))
+                        for i in pts.indices { p.addLine(to: pos(i)) }
+                        p.addLine(to: CGPoint(x: w, y: h))
+                        p.closeSubpath()
+                    }
+                    .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    Path { p in
+                        p.move(to: pos(0))
+                        for i in pts.indices.dropFirst() { p.addLine(to: pos(i)) }
+                    }
+                    .stroke(LinearGradient(colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
+                                                    Color(red: 0.16, green: 0.65, blue: 0.77)],
+                                           startPoint: .leading, endPoint: .trailing),
+                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    Circle().fill(.white).frame(width: 8, height: 8).position(pos(n - 1))
+                }
             }
-        }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: 6)) {
-                AxisGridLine().foregroundStyle(.white.opacity(0.06))
-                AxisValueLabel(format: .dateTime.hour(.twoDigits(amPM: .omitted)))
-                    .foregroundStyle(.white.opacity(0.5)).font(.system(size: 11))
+            .frame(height: 92)
+            HStack {
+                Text(Fmt.time(pts.first!.timestamp))
+                Spacer()
+                Text("Jetzt")
             }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.7))
         }
-        .frame(height: 124)
     }
 }
 
@@ -74,15 +88,10 @@ claude/great-bell-4xe1y8
 struct DailyTrendCard: View {
     let days: [DayTrend]
 
-    private let barGradient = LinearGradient(
-        colors: [Color(red: 0.37, green: 0.82, blue: 0.90), Color(red: 0.65, green: 0.95, blue: 0.82)],
-        startPoint: .leading, endPoint: .trailing)
-
-    private var xDomain: ClosedRange<Double> {
+    private var bounds: (min: Double, max: Double) {
         let all = days.flatMap { [$0.low, $0.high] }
-        let lo = (all.min() ?? 0) - 1.5
-        let hi = (all.max() ?? 1) + 1.5
-        return lo...(hi > lo ? hi : lo + 1)
+        let lo = all.min() ?? 0, hi = all.max() ?? 1
+        return (lo, hi > lo ? hi : lo + 1)
     }
 
     var body: some View {
@@ -91,46 +100,45 @@ struct DailyTrendCard: View {
                 Text("10-TAGE-TREND")
                     .font(.system(size: 13, weight: .semibold)).tracking(0.4)
                     .foregroundStyle(.white.opacity(0.62))
-                    .padding(.bottom, 12)
-                Divider().overlay(Color.white.opacity(0.14))
-                chart.padding(.top, 14)
-            }
-        }
-    }
-
-    private var chart: some View {
-        Chart(days) { day in
-            BarMark(
-                xStart: .value("Min", day.low),
-                xEnd: .value("Max", day.high),
-                y: .value("Tag", day.date, unit: .day),
-                height: .fixed(7)
-            )
-            .cornerRadius(4)
-            .foregroundStyle(barGradient)
-            .annotation(position: .leading, spacing: 8) {
-                Text("\(Fmt.f0(day.low))°")
-                    .font(.system(size: 15)).foregroundStyle(.white.opacity(0.6))
-            }
-            .annotation(position: .trailing, spacing: 8) {
-                Text("\(Fmt.f0(day.high))°")
-                    .font(.system(size: 15, weight: .medium)).foregroundStyle(.white)
-            }
-        }
-        .chartXScale(domain: xDomain)
-        .chartXAxis(.hidden)
-        .chartYAxis {
-            AxisMarks(position: .leading, values: days.map(\.date)) { value in
-                if let date = value.as(Date.self) {
-                    AxisValueLabel {
-                        Text(Fmt.isToday(date) ? "Heute" : Fmt.weekdayShort(date))
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                    .padding(.bottom, 6)
+                ForEach(days) { day in
+                    row(day)
+                    if day.id != days.last?.id {
+                        Divider().overlay(Color.white.opacity(0.10))
                     }
                 }
             }
         }
-        .frame(height: CGFloat(days.count) * 30)
+    }
+
+    private func label(_ day: DayTrend) -> String {
+        Fmt.isToday(day.date) ? "Heute" : Fmt.weekdayShort(day.date)
+    }
+
+    private func row(_ day: DayTrend) -> some View {
+        let (lo, hi) = bounds
+        let span = hi - lo
+        return HStack(spacing: 12) {
+            Text(label(day)).font(.system(size: 17, weight: .semibold)).frame(width: 52, alignment: .leading)
+            Text("\(Fmt.f0(day.low))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
+            GeometryReader { geo in
+                let leading = (day.low - lo) / span * geo.size.width
+                let width = (day.high - day.low) / span * geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.15))
+                    Capsule().fill(LinearGradient(
+                        colors: [Color(red: 0.37, green: 0.82, blue: 0.90),
+                                 Color(red: 0.65, green: 0.95, blue: 0.82)],
+                        startPoint: .leading, endPoint: .trailing))
+                        .frame(width: max(6, width))
+                        .offset(x: leading)
+                }
+            }
+            .frame(height: 6)
+            Text("\(Fmt.f0(day.high))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
+        }
+        .foregroundStyle(.white)
+        .padding(.vertical, 9)
     }
 }
 
