@@ -75,6 +75,13 @@ the wrong assumptions corrected. Findings, in the order they were checked:
    (which returned the *oldest* visible reading). Separator `;`, German decimal
    comma, and `Europe/Berlin` were correct; the transport already falls back to
    ISO-8859-1 decoding.
+5. **Data tabs & cross-parameter** (`GKDEndpoints.dataURL`) — verified live
+   2026-06: each station exposes sibling tabs reused via the same number —
+   `messwerte/tabelle` (recent 15-min series → hourly line chart) and
+   `jahreswerte` (daily mean/max/min → 10-day trend). Water level / discharge
+   for one location share the station number; only the parameter slug in the
+   path changes, so the level (lakes) and discharge (rivers) cards are fetched
+   by swapping that slug.
 4. **Coordinates** — still unverified: the overview table has no lat/lon, so
    scraped stations get `(0,0)` and should be enriched from the detail page or
    matched to the seed catalogue. The seed coordinates are approximate

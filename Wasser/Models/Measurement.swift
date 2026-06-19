@@ -19,6 +19,15 @@ struct Measurement: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// One calendar day's aggregated values for a parameter (GKD "Tageswerte":
+/// daily mean, maximum and minimum), used by the 10-day trend.
+struct DailyAggregate: Codable, Hashable, Sendable {
+    let date: Date
+    let mean: Double
+    let high: Double
+    let low: Double
+}
+
 /// An ordered series of measurements for a single parameter over a time range.
 struct TimeSeries: Codable, Hashable, Sendable {
     let parameter: MeasurementParameter

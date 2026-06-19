@@ -76,7 +76,9 @@ private struct ResultRow: View {
                 .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 1) {
                 Text(station.waterBodyName).font(.system(size: 17)).foregroundStyle(.white)
-                Text("\(station.region ?? "") · \(station.waterBodyType.displayName)")
+                Text(station.locationSubtitle.isEmpty
+                     ? station.waterBodyType.displayName
+                     : "\(station.locationSubtitle) · \(station.waterBodyType.displayName)")
                     .font(.system(size: 13)).foregroundStyle(Color(white: 0.92).opacity(0.6))
             }
             Spacer()

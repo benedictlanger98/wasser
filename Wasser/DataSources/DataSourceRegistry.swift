@@ -49,4 +49,10 @@ actor DataSourceRegistry {
                          range: TimeRange) async throws -> TimeSeries {
         try await source(for: station).fetchTimeSeries(for: station, parameter: parameter, range: range)
     }
+
+    func fetchDailyTrend(for station: MeasurementStation,
+                         parameter: MeasurementParameter,
+                         days: Int) async throws -> [DailyAggregate] {
+        try await source(for: station).fetchDailyTrend(for: station, parameter: parameter, days: days)
+    }
 }

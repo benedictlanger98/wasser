@@ -111,6 +111,12 @@ final class WaterRepository: ObservableObject {
         try await registry.fetchTimeSeries(for: station, parameter: parameter, range: range)
     }
 
+    func dailyTrend(for station: MeasurementStation,
+                    parameter: MeasurementParameter,
+                    days: Int = 10) async throws -> [DailyAggregate] {
+        try await registry.fetchDailyTrend(for: station, parameter: parameter, days: days)
+    }
+
     // MARK: - Favourites
 
     func isFavorite(_ station: MeasurementStation) -> Bool {
