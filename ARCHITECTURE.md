@@ -95,7 +95,8 @@ The `Wassertemperatur.dc.html` handoff (an Apple-Weather-style concept) is built
 in SwiftUI under `Views/` + `DesignSystem/`:
 
 - **Detail** (`Views/Detail/`) — animated water hero (`WaterHeroBackground`, a
-  `TimelineView`+`Canvas` port of the mock's WebGL caustics), hero header,
+  faithful Metal port of the mock's WebGL caustics shader in
+  `WaterCaustics.metal`, driven by `TimelineView`+`.colorEffect`), hero header,
   hourly strip, 10-day trend, and the two-column condition grid (Luft & Wasser,
   UV, Wind, Wasserqualität, Sonnenauf-/untergang; Strömung for rivers,
   Wellenhöhe/Gezeiten for sea). Cards use the frosted `GlassCard`.
@@ -106,7 +107,9 @@ in SwiftUI under `Views/` + `DesignSystem/`:
   (search · page dots · list) and sliding screen transitions, driven by
   `AppRouter`.
 
-Per-type colour themes (`WaterTheme`) are ported verbatim from the mock.
+Per-type colour themes (`WaterTheme`) are ported verbatim from the mock. The
+original design handoff is kept in `Design/` (`Wassertemperatur.dc.html` plus
+screenshots) as the source of truth for reconciling the SwiftUI build.
 
 ## Outstanding
 

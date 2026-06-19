@@ -11,6 +11,8 @@ struct WaterTheme: Equatable {
     let intensity: Double
     /// Strength of the light "rays".
     let rays: Double
+    /// Horizontal drift of the caustics (rivers flow; lakes/sea are still).
+    let flow: Double
 
     /// Raw shallow/deep components for building gradients elsewhere.
     let deepRGB: (Double, Double, Double)
@@ -25,7 +27,8 @@ struct WaterTheme: Equatable {
                  shallow: (Double, Double, Double),
                  sun: (Double, Double, Double),
                  intensity: Double,
-                 rays: Double) {
+                 rays: Double,
+                 flow: Double) {
         self.deepRGB = deep
         self.shallowRGB = shallow
         self.sunRGB = sun
@@ -34,19 +37,21 @@ struct WaterTheme: Equatable {
         self.sun = Color(red: sun.0, green: sun.1, blue: sun.2)
         self.intensity = intensity
         self.rays = rays
+        self.flow = flow
     }
 
+    // Constants ported verbatim from the design's `themeFor` (Wassertemperatur.dc.html).
     static func forType(_ type: WaterBodyType) -> WaterTheme {
         switch type {
         case .sea:
             return WaterTheme(deep: (0.05, 0.32, 0.42), shallow: (0.45, 0.85, 0.82),
-                              sun: (1.0, 1.0, 0.92), intensity: 1.35, rays: 0.78)
+                              sun: (1.0, 1.0, 0.92), intensity: 1.35, rays: 0.78, flow: 0.0)
         case .river:
             return WaterTheme(deep: (0.05, 0.16, 0.12), shallow: (0.28, 0.52, 0.40),
-                              sun: (0.85, 1.0, 0.82), intensity: 0.95, rays: 0.45)
+                              sun: (0.85, 1.0, 0.82), intensity: 0.95, rays: 0.45, flow: 0.07)
         case .lake:
             return WaterTheme(deep: (0.02, 0.12, 0.20), shallow: (0.10, 0.46, 0.56),
-                              sun: (0.72, 0.95, 1.0), intensity: 1.15, rays: 0.58)
+                              sun: (0.72, 0.95, 1.0), intensity: 1.15, rays: 0.58, flow: 0.0)
         }
     }
 
