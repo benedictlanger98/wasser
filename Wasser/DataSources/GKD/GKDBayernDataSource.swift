@@ -84,7 +84,7 @@ struct GKDBayernDataSource: WaterDataSource {
                 operatorName: "Bayerisches Landesamt für Umwelt",
                 availableParameters: type == .river
                     ? [.waterTemperature, .waterLevel, .discharge]
-                    : [.waterTemperature],
+                    : [.waterTemperature, .waterLevel],
                 detailURL: detail
             )
             // Stash the current temperature from the overview so the detail/list
@@ -141,6 +141,13 @@ struct GKDBayernDataSource: WaterDataSource {
             throw DataSourceError.unsupportedParameter(parameter)
         }
         return try await scraper.timeSeries(for: station, parameter: parameter, range: range)
+    }
+
+    func fetchDailyTrend(for station: MeasurementStation,
+                         parameter: MeasurementParameter,
+                         days: Int) async throws -> [DailyAggregate] {
+        let all = await scraper.dailyAggregates(for: station, parameter: parameter)
+        return Array(all.sorted { $0.date > $1.date }.prefix(days))   // newest first
     }
 
     // MARK: - Matching / id helpers

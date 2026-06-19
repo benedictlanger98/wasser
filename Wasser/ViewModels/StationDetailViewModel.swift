@@ -31,25 +31,44 @@ final class StationDetailViewModel: ObservableObject {
             async let hourlySeries = try? repository.timeSeries(for: station,
                                                                 parameter: .waterTemperature,
                                                                 range: .day)
+            async let dailyAggregates = try? repository.dailyTrend(for: station,
+                                                                   parameter: .waterTemperature,
+                                                                   days: 10)
             let current = try await snapshot
             let series = await hourlySeries
+            let aggregates = (await dailyAggregates) ?? []
 
             let waterTemp = current.waterTemperature?.value
                 ?? series?.latest?.value
                 ?? 0
-            let hourly = (series?.points.isEmpty == false)
-                ? Array(series!.points.suffix(24))
+
+            // Hourly line: the 15-min series for the current day only;
+            // synthesise when a real series is unavailable (e.g. lakes, which
+            // are read manually).
+            let todayPoints = (series?.points ?? []).filter { Fmt.isToday($0.timestamp) }
+            let hourly = todayPoints.count >= 2
+                ? todayPoints
                 : ConditionEnrichment.syntheticHourly(base: waterTemp)
+
+            // 10-day trend from real daily aggregates (today first), else synthetic.
+            let daily: [DayTrend] = aggregates.isEmpty
+                ? ConditionEnrichment.dailyTrend(base: waterTemp)
+                : aggregates.map { agg in
+                    DayTrend(label: Fmt.isToday(agg.date) ? "Heute" : Fmt.weekdayShort(agg.date),
+                             low: agg.low, high: agg.high)
+                }
 
             conditions = LocationConditions(
                 station: station,
                 waterTemperature: waterTemp,
                 hourly: hourly,
-                daily: ConditionEnrichment.dailyTrend(base: waterTemp),
+                daily: daily,
                 weather: current.weather,
                 quality: ConditionEnrichment.quality(for: station, waterTemperature: waterTemp),
                 marine: ConditionEnrichment.marine(for: station),
-                flow: ConditionEnrichment.flow(for: station, discharge: current.discharge)
+                flow: ConditionEnrichment.flow(for: station, discharge: current.discharge),
+                waterLevel: current.waterLevel,
+                discharge: current.discharge
             )
         } catch {
             errorMessage = error.localizedDescription

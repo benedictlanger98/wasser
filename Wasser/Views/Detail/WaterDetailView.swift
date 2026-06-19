@@ -53,12 +53,14 @@ struct WaterDetailView: View {
         return VStack(spacing: 2) {
             Text(viewModel.station.waterBodyName)
                 .font(.system(size: 32, weight: .medium))
-            Text(viewModel.station.locationSubtitle)
-                .font(.system(size: 14, weight: .semibold)).tracking(0.6).opacity(0.85)
+            if !viewModel.station.locationSubtitle.isEmpty {
+                Text(viewModel.station.locationSubtitle)
+                    .font(.system(size: 14, weight: .semibold)).tracking(0.6).opacity(0.85)
+            }
             HStack(alignment: .top, spacing: 0) {
                 Text("\(Fmt.f0(c?.waterTemperature ?? 0))")
-                    .font(.system(size: 96, weight: .ultraLight))
-                Text("°").font(.system(size: 40, weight: .ultraLight)).padding(.top, 10)
+                    .font(.system(size: 96, weight: .light))
+                Text("°").font(.system(size: 40, weight: .light)).padding(.top, 10)
             }
             Text(conditionText).font(.system(size: 21, weight: .medium))
             Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
@@ -87,9 +89,9 @@ struct WaterDetailView: View {
     }
 
     private var maxMin: (hi: String, lo: String) {
-        let all = (viewModel.conditions?.daily ?? []).flatMap { [$0.low, $0.high] }
-        guard let hi = all.max(), let lo = all.min() else { return ("–", "–") }
-        return (Fmt.f0(hi), Fmt.f0(lo))
+        // Today's high/low (the daily trend is newest-first).
+        guard let today = viewModel.conditions?.daily.first else { return ("–", "–") }
+        return (Fmt.f0(today.high), Fmt.f0(today.low))
     }
 
     // MARK: Cards
@@ -111,8 +113,11 @@ struct WaterDetailView: View {
                     WaveCard(marine: marine)
                     TideCard(marine: marine)
                 }
-                if let flow = c.flow {
-                    FlowCard(flow: flow)
+                if c.station.waterBodyType == .river, let discharge = c.discharge {
+                    AbflussCard(discharge: discharge)
+                }
+                if c.station.waterBodyType == .lake, let level = c.waterLevel {
+                    WasserstandCard(level: level)
                 }
                 SunriseCard(sunrise: c.weather?.sunrise, sunset: c.weather?.sunset)
             }

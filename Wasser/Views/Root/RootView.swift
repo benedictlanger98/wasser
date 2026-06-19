@@ -64,9 +64,8 @@ struct RootView: View {
 
     private var bottomBar: some View {
         HStack {
-            Button { router.openSearch(fromList: false) } label: {
-                Image(systemName: "mappin.and.ellipse").font(.system(size: 22))
-            }
+            // Balances the trailing list button so the page dots stay centred.
+            Color.clear.frame(width: 24, height: 24)
             Spacer()
             HStack(spacing: 9) {
                 ForEach(repository.favoriteStations) { station in

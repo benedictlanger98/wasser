@@ -25,35 +25,39 @@ struct GKDScraper: Sendable {
     }
 
     /// Loads the latest value for a single parameter at a station from its
-    /// "messwerte" page.
+    /// recent (15-min) table. Works for any parameter at the location (water
+    /// level / discharge reuse the same station number, slug swapped).
     func latestValue(for station: MeasurementStation,
                      parameter: MeasurementParameter) async throws -> Measurement? {
-        guard let url = GKDEndpoints.messwerte(for: station, parameter: parameter) else {
-            return nil
-        }
-        let html = try await client.getText(url)
-        // Verified live 2026-06: the messwerte table is ordered newest-first,
-        // so pick the row with the maximum timestamp rather than the last row.
-        return GKDParser.parseMeasurementTable(html: html, parameter: parameter)
-            .max { $0.timestamp < $1.timestamp }
+        let points = await recentSeries(for: station, parameter: parameter)
+        // The table is newest-first, but pick by max timestamp to be safe.
+        return points.max { $0.timestamp < $1.timestamp }
     }
 
-    /// Loads a time series for a parameter, preferring the CSV download and
-    /// falling back to scraping the rendered table.
+    /// Recent 15-minute series (≈7 days) from `.../messwerte/tabelle`. Returns
+    /// an empty array rather than throwing so a missing parameter (e.g. no level
+    /// gauge at a lake buoy) degrades gracefully.
+    func recentSeries(for station: MeasurementStation,
+                      parameter: MeasurementParameter) async -> [Measurement] {
+        guard let url = GKDEndpoints.dataURL(for: station, parameter: parameter, tab: .recentTable),
+              let html = try? await client.getText(url) else { return [] }
+        return GKDParser.parseMeasurementTable(html: html, parameter: parameter)
+    }
+
+    /// Daily mean/max/min aggregates from `.../jahreswerte` (the "Jahresgrafik"
+    /// table), newest first.
+    func dailyAggregates(for station: MeasurementStation,
+                         parameter: MeasurementParameter) async -> [DailyAggregate] {
+        guard let url = GKDEndpoints.dataURL(for: station, parameter: parameter, tab: .yearTable),
+              let html = try? await client.getText(url) else { return [] }
+        return GKDParser.parseDailyTable(html: html)
+    }
+
+    /// A time series for a parameter — the recent 15-min table.
     func timeSeries(for station: MeasurementStation,
                     parameter: MeasurementParameter,
                     range: TimeRange) async throws -> TimeSeries {
-        if let downloadURL = GKDEndpoints.download(for: station, parameter: parameter, range: range),
-           let csv = try? await client.getText(downloadURL) {
-            let points = GKDParser.parseCSV(csv, parameter: parameter)
-            if !points.isEmpty { return TimeSeries(parameter: parameter, points: points) }
-        }
-
-        guard let url = GKDEndpoints.messwerte(for: station, parameter: parameter) else {
-            throw DataSourceError.notFound
-        }
-        let html = try await client.getText(url)
-        let points = GKDParser.parseMeasurementTable(html: html, parameter: parameter)
+        let points = await recentSeries(for: station, parameter: parameter)
         return TimeSeries(parameter: parameter, points: points)
     }
 }
