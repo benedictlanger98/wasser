@@ -38,6 +38,7 @@ struct HourlyTemperatureCard: View {
     }
 
     private var chart: some View {
+claude/great-bell-4xe1y8
         Chart(hourly) { m in
             AreaMark(x: .value("Zeit", m.timestamp),
                      y: .value("Temperatur", m.value))
