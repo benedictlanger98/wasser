@@ -38,8 +38,8 @@ enum GKDParser {
             // Datum | <value>. The current value is the right-most numeric cell
             // (the date cell never parses as a number), and the Landkreis
             // abbreviation in column 3 is the only region hint the table gives.
-            let stationName = stripTags(cells[0])
-            let waterBodyName = cells.count > 1 ? stripTags(cells[1]) : ""
+            let stationName = spacedName(stripTags(cells[0]))
+            let waterBodyName = cells.count > 1 ? spacedName(stripTags(cells[1])) : ""
             let district = cells.count > 2 ? stripTags(cells[2]) : ""
             let value = cells.reversed().compactMap { germanDouble(stripTags($0)) }.first
             // The "Datum" column carries the observation time of the current
@@ -120,6 +120,15 @@ enum GKDParser {
             guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: html) else { return nil }
             return String(html[r])
         }
+    }
+
+    /// Inserts a space where a lowercase letter is immediately followed by an
+    /// uppercase one ("StarnbergerSee" → "Starnberger See"); GKD sometimes drops
+    /// the space in compound water-body names.
+    static func spacedName(_ string: String) -> String {
+        string.replacingOccurrences(of: "(?<=\\p{Ll})(?=\\p{Lu})",
+                                    with: " ",
+                                    options: .regularExpression)
     }
 
     /// First `href` attribute value found in a fragment.

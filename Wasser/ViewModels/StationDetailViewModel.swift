@@ -42,13 +42,13 @@ final class StationDetailViewModel: ObservableObject {
                 ?? series?.latest?.value
                 ?? 0
 
-            // Hourly line: the last ~36h of the 15-min series; synthesise when a
-            // real series is unavailable (e.g. lakes, which are manually read).
-            let cutoff = Date().addingTimeInterval(-36 * 3600)
-            let recent = (series?.points ?? []).filter { $0.timestamp >= cutoff }
-            let hourly = recent.isEmpty
-                ? ConditionEnrichment.syntheticHourly(base: waterTemp)
-                : recent
+            // Hourly line: the 15-min series for the current day only;
+            // synthesise when a real series is unavailable (e.g. lakes, which
+            // are read manually).
+            let todayPoints = (series?.points ?? []).filter { Fmt.isToday($0.timestamp) }
+            let hourly = todayPoints.count >= 2
+                ? todayPoints
+                : ConditionEnrichment.syntheticHourly(base: waterTemp)
 
             // 10-day trend from real daily aggregates (today first), else synthetic.
             let daily: [DayTrend] = aggregates.isEmpty
