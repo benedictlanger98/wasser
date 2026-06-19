@@ -1,16 +1,37 @@
 import Foundation
 
-/// Bathing-water-quality summary shown in the WASSERQUALITÄT card.
+/// Swimming-comfort summary shown in the BADEHINWEIS card and folded into the
+/// hero condition line.
 ///
-/// Not provided by GKD's hydrology feed. For Bavaria the authoritative source
-/// is the LGL Badegewässer dataset; until that source is wired in, values are
-/// derived deterministically from water body type + temperature (see
-/// `ConditionEnrichment`). Modelled as its own type so swapping in a real
-/// provider is isolated.
-struct WaterQualityInfo: Hashable, Sendable {
-    let rating: String        // e.g. "Ausgezeichnet"
+/// Honest, data-backed: derived purely from the *real* water temperature (see
+/// `ConditionEnrichment`), not a fabricated bathing-quality rating. GKD's
+/// hydrology feed carries no bathing-quality / clarity data, so we surface a
+/// comfort hint from the one quantity we actually measure.
+struct SwimComfort: Hashable, Sendable {
+    let rating: String        // e.g. "Angenehm"
     let note: String          // short caption
-    let clarityMeters: Double // Sichttiefe
+    let symbolName: String
+}
+
+/// Direction the water temperature is moving, used in the hero condition line.
+enum WaterTrend: Sendable, Hashable {
+    case rising, falling, steady
+
+    var label: String {
+        switch self {
+        case .rising:  return "steigend"
+        case .falling: return "fallend"
+        case .steady:  return "gleichbleibend"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .rising:  return "arrow.up.right"
+        case .falling: return "arrow.down.right"
+        case .steady:  return "arrow.right"
+        }
+    }
 }
 
 /// Sea-only marine extras (waves + tides). Placeholder until a marine source.
@@ -45,13 +66,20 @@ struct LocationConditions: Sendable {
     /// Daily trend, newest first (today at index 0).
     let daily: [DayTrend]
     let weather: WeatherSnapshot?
-    let quality: WaterQualityInfo
+    /// Swimming-comfort hint derived from the water temperature.
+    let comfort: SwimComfort
+    /// Direction of the water-temperature change (from the recent series).
+    let trend: WaterTrend
     let marine: MarineInfo?
     let flow: FlowInfo?
-    /// Latest water level (Wasserstand), shown for lakes.
+    /// Latest water level (Wasserstand), shown for lakes and rivers.
     let waterLevel: Measurement?
+    /// Annual mean water level (cm) for the ± deviation readout, if known.
+    let waterLevelAnnualMean: Double?
     /// Latest discharge (Abfluss), shown for rivers.
     let discharge: Measurement?
+    /// Annual mean discharge (m³/s) for the ± deviation readout, if known.
+    let dischargeAnnualMean: Double?
 
     var theme: WaterTheme { WaterTheme.forType(station.waterBodyType) }
 }

@@ -42,6 +42,24 @@ struct MockWaterDataSource: WaterDataSource {
         TimeSeries(parameter: parameter, points: synthesise(parameter, for: station, range: range))
     }
 
+    func fetchDailyTrend(for station: MeasurementStation,
+                         parameter: MeasurementParameter,
+                         days: Int) async throws -> [DailyAggregate] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Berlin") ?? .current
+        let today = cal.startOfDay(for: Date())
+        let base = baseValue(parameter, station: station)
+        let amp = dailyAmplitude(parameter)
+        let seed = Double(abs(station.id.hashValue % 100)) / 100.0
+        return (0..<max(0, days)).map { i in
+            let date = cal.date(byAdding: .day, value: -i, to: today) ?? today
+            let wobble = sin(Double(i) * 0.6 + seed * 6) * amp
+            let mean = max(0, base + wobble)
+            return DailyAggregate(date: date, mean: mean,
+                                  high: mean + amp, low: max(0, mean - amp))
+        }
+    }
+
     // MARK: - Synthesis
 
     private func synthesise(_ parameter: MeasurementParameter,

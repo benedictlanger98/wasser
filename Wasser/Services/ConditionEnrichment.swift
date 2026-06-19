@@ -1,31 +1,45 @@
 import Foundation
 
 /// Derives the parts of the detail screen that GKD's hydrology feed and
-/// WeatherKit don't provide directly — bathing-water quality, clarity, marine
-/// extras, flow direction, and a multi-day trend.
+/// WeatherKit don't provide directly — a swimming-comfort hint, the water
+/// temperature trend, marine extras and river flow.
 ///
-/// These derivations mirror the design mock and are clearly placeholder logic:
-/// they are deterministic functions of water-body type and temperature so the
-/// UI is fully populated. Each is isolated here so a real provider (e.g. LGL
-/// Badegewässer for quality, a marine API for waves/tides) can replace one
-/// function without touching the view model or views.
+/// Comfort and trend are honest functions of the *real* measured water
+/// temperature, not fabricated quality data. Marine/flow remain placeholder
+/// derivations (no marine source wired in yet). Each is isolated here so a real
+/// provider can replace one function without touching the view model or views.
 enum ConditionEnrichment {
 
-    static func quality(for station: MeasurementStation, waterTemperature: Double) -> WaterQualityInfo {
-        switch station.waterBodyType {
-        case .lake:
-            return WaterQualityInfo(rating: "Ausgezeichnet",
-                                    note: "Beste Sicht, badetauglich",
-                                    clarityMeters: 5.0)
-        case .sea:
-            return WaterQualityInfo(rating: "Gut",
-                                    note: "Badewasser amtlich geprüft",
-                                    clarityMeters: 3.5)
-        case .river:
-            return WaterQualityInfo(rating: "Mäßig",
-                                    note: "Nach Regen meiden",
-                                    clarityMeters: 1.8)
+    /// Swimming-comfort hint derived from the measured water temperature.
+    static func comfort(forWaterTemperature t: Double) -> SwimComfort {
+        switch t {
+        case ..<10:
+            return SwimComfort(rating: "Sehr kalt", note: "Nur für Abgehärtete", symbolName: "snowflake")
+        case 10..<16:
+            return SwimComfort(rating: "Kalt", note: "Kurzes Bad, schnell auskühlend", symbolName: "thermometer.low")
+        case 16..<20:
+            return SwimComfort(rating: "Erfrischend", note: "Angenehm bei warmem Wetter", symbolName: "drop")
+        case 20..<23:
+            return SwimComfort(rating: "Angenehm", note: "Ideale Badetemperatur", symbolName: "figure.pool.swim")
+        case 23..<26:
+            return SwimComfort(rating: "Warm", note: "Sehr angenehm zum Baden", symbolName: "sun.max")
+        default:
+            return SwimComfort(rating: "Sehr warm", note: "Badewannentemperatur", symbolName: "thermometer.high")
         }
+    }
+
+    /// Direction of the recent water-temperature change. Compares the last
+    /// reading against the average of the few before it (same logic as
+    /// `TimeSeries.trend`), with a 0.2 °C dead-band to ignore sensor jitter.
+    static func trend(from series: [Measurement]) -> WaterTrend {
+        guard series.count >= 2, let current = series.last?.value else { return .steady }
+        let tail = series.suffix(5).dropLast()
+        guard !tail.isEmpty else { return .steady }
+        let avg = tail.map(\.value).reduce(0, +) / Double(tail.count)
+        let delta = current - avg
+        if delta > 0.2 { return .rising }
+        if delta < -0.2 { return .falling }
+        return .steady
     }
 
     static func marine(for station: MeasurementStation) -> MarineInfo? {
