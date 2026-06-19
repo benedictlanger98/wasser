@@ -126,7 +126,7 @@ struct DailyTrendCard: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 0) {
-                Text("10-TAGE-TREND")
+                Text("7-TAGE-TREND")
                     .font(.system(size: 13, weight: .semibold)).tracking(0.4)
                     .foregroundStyle(.white.opacity(0.62))
                     .padding(.bottom, 6)
