@@ -9,16 +9,14 @@ enum AppEnvironment {
 
     /// Production configuration: live GKD Bayern scraping + WeatherKit.
     static func live() -> WaterRepository {
-        let weather = WeatherKitProvider()
-        let gkd = GKDBayernDataSource(weather: weather, useLiveCatalogue: true)
+        let gkd = GKDBayernDataSource(useLiveCatalogue: true)
         let registry = DataSourceRegistry(sources: [gkd])
-        return WaterRepository(registry: registry)
+        return WaterRepository(registry: registry, weatherProvider: WeatherKitProvider())
     }
 
     /// Network-free configuration for previews, screenshots and UI tests.
     static func preview() -> WaterRepository {
         let registry = DataSourceRegistry(sources: [MockWaterDataSource()])
-        let repository = WaterRepository(registry: registry)
-        return repository
+        return WaterRepository(registry: registry, weatherProvider: MockWeatherProvider())
     }
 }

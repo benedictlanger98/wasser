@@ -73,11 +73,31 @@ The Xcode project uses a **file-system-synchronized root group** (Xcode 16,
 `objectVersion = 77`): every file under `Wasser/` is compiled automatically, so
 adding Swift files needs no `project.pbxproj` edits.
 
+## UI — implemented from the design
+
+The `Wassertemperatur.dc.html` handoff (an Apple-Weather-style concept) is built
+in SwiftUI under `Views/` + `DesignSystem/`:
+
+- **Detail** (`Views/Detail/`) — animated water hero (`WaterHeroBackground`, a
+  `TimelineView`+`Canvas` port of the mock's WebGL caustics), hero header,
+  hourly strip, 10-day trend, and the two-column condition grid (Luft & Wasser,
+  UV, Wind, Wasserqualität, Sonnenauf-/untergang; Strömung for rivers,
+  Wellenhöhe/Gezeiten for sea). Cards use the frosted `GlassCard`.
+- **List** (`Views/List/`) — saved-location gradient cards with shimmer.
+- **Search** (`Views/Search/`) — system keyboard (the mock's drawn keyboard is a
+  web artifact), live filtering over the catalogue, tap-to-save.
+- **Root** (`Views/Root/`) — swipeable detail pager with the custom bottom bar
+  (search · page dots · list) and sliding screen transitions, driven by
+  `AppRouter`.
+
+Per-type colour themes (`WaterTheme`) are ported verbatim from the mock.
+
 ## Outstanding
 
-- **Design import is pending** — the `claude_design` connector was not connected
-  in the session that scaffolded this. Run `/design-login`, then the
-  `Wassertemperatur.dc.html` design replaces the placeholder views. The data
-  layer is design-independent and ready to bind.
-- WeatherKit needs the capability/entitlement on the App ID and a paid developer
-  account to return data at runtime.
+- **Visuals are render-unverified** — there is no macOS/Swift toolchain in this
+  environment, so the SwiftUI was written but not compiled or run. Build in
+  Xcode 16+ and reconcile against the mock screenshots.
+- **WeatherKit** needs the capability/entitlement on the App ID and a paid
+  developer account to return data at runtime; without it the weather cards
+  show "–". Previews use `MockWeatherProvider`.
+- The scraper assumptions in the section above still require live verification.

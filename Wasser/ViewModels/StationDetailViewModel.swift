@@ -1,15 +1,13 @@
 import Foundation
 
-/// Drives the station detail screen: loads current conditions and the selected
-/// parameter's time series, reacting to parameter/range changes.
+/// Loads and assembles all data the detail screen renders for a single station:
+/// current + hourly water temperature from the data source, co-located weather,
+/// and the derived enrichment cards.
 @MainActor
 final class StationDetailViewModel: ObservableObject {
     let station: MeasurementStation
 
-    @Published var conditions: StationConditions?
-    @Published var series: TimeSeries?
-    @Published var selectedParameter: MeasurementParameter
-    @Published var selectedRange: TimeRange = .week
+    @Published var conditions: LocationConditions?
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -18,32 +16,44 @@ final class StationDetailViewModel: ObservableObject {
     init(station: MeasurementStation, repository: WaterRepository) {
         self.station = station
         self.repository = repository
-        self.selectedParameter = station.availableParameters.first ?? .waterTemperature
     }
 
     func load() async {
+        guard conditions == nil else { return }
+        await reload()
+    }
+
+    func reload() async {
         isLoading = true
         errorMessage = nil
         do {
-            async let conditions = repository.conditions(for: station)
-            async let series = repository.timeSeries(for: station,
-                                                     parameter: selectedParameter,
-                                                     range: selectedRange)
-            self.conditions = try await conditions
-            self.series = try await series
+            async let snapshot = repository.conditions(for: station)
+            async let hourlySeries = try? repository.timeSeries(for: station,
+                                                                parameter: .waterTemperature,
+                                                                range: .day)
+            let current = try await snapshot
+            let series = await hourlySeries
+
+            let waterTemp = current.waterTemperature?.value
+                ?? series?.latest?.value
+                ?? 0
+            let hourly = (series?.points.isEmpty == false)
+                ? Array(series!.points.suffix(24))
+                : ConditionEnrichment.syntheticHourly(base: waterTemp)
+
+            conditions = LocationConditions(
+                station: station,
+                waterTemperature: waterTemp,
+                hourly: hourly,
+                daily: ConditionEnrichment.dailyTrend(base: waterTemp),
+                weather: current.weather,
+                quality: ConditionEnrichment.quality(for: station, waterTemperature: waterTemp),
+                marine: ConditionEnrichment.marine(for: station),
+                flow: ConditionEnrichment.flow(for: station, discharge: current.discharge)
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
-    }
-
-    func reloadSeries() async {
-        do {
-            series = try await repository.timeSeries(for: station,
-                                                     parameter: selectedParameter,
-                                                     range: selectedRange)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
     }
 }

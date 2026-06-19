@@ -1,9 +1,8 @@
 import Foundation
 
 /// `WaterDataSource` backed by the Gewässerkundlicher Dienst Bayern
-/// (gkd.bayern.de). Maps scraped rows into the app's domain model and, when a
-/// `WeatherProvider` is supplied, decorates current conditions with co-located
-/// weather.
+/// (gkd.bayern.de). Maps scraped rows into the app's domain model. Weather is
+/// merged in by `WaterRepository`, keeping this source purely hydrological.
 ///
 /// Adaptability: this type only orchestrates. URL knowledge lives in
 /// `GKDEndpoints`, parsing in `GKDParser`, transport in `GKDScraper`. Replacing
@@ -13,16 +12,13 @@ struct GKDBayernDataSource: WaterDataSource {
     let displayName = "Gewässerkundlicher Dienst Bayern"
 
     private let scraper: GKDScraper
-    private let weather: WeatherProvider?
     /// When true, the network overview tables are scraped; otherwise only the
     /// bundled seed catalogue is returned (useful for previews / offline).
     private let useLiveCatalogue: Bool
 
     init(scraper: GKDScraper = GKDScraper(),
-         weather: WeatherProvider? = nil,
          useLiveCatalogue: Bool = true) {
         self.scraper = scraper
-        self.weather = weather
         self.useLiveCatalogue = useLiveCatalogue
     }
 
@@ -87,9 +83,7 @@ struct GKDBayernDataSource: WaterDataSource {
                 if let measurement { latest[parameter] = measurement }
             }
         }
-
-        let snapshot = await weather?.currentWeather(at: station.coordinate)
-        return StationConditions(stationID: station.id, latest: latest, weather: snapshot)
+        return StationConditions(stationID: station.id, latest: latest, weather: nil)
     }
 
     func fetchTimeSeries(for station: MeasurementStation,

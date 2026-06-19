@@ -11,16 +11,20 @@ final class WaterRepository: ObservableObject {
     @Published private(set) var isLoadingStations = false
     @Published var lastError: String?
     @Published var favoriteIDs: Set<String> = []
+    /// Saved stations in user/display order (the detail pager and list use this).
+    @Published var favoriteOrder: [String] = []
 
     private let registry: DataSourceRegistry
+    private let weatherProvider: WeatherProvider
     private let favoritesKey = "favorite_station_ids"
 
     /// Conditions cache keyed by station id, with a short freshness window.
     private var conditionsCache: [String: (value: StationConditions, fetchedAt: Date)] = [:]
     private let conditionsTTL: TimeInterval = 60 * 5
 
-    init(registry: DataSourceRegistry) {
+    init(registry: DataSourceRegistry, weatherProvider: WeatherProvider = NoWeatherProvider()) {
         self.registry = registry
+        self.weatherProvider = weatherProvider
         loadFavorites()
     }
 
@@ -34,7 +38,25 @@ final class WaterRepository: ObservableObject {
         if stations.isEmpty {
             lastError = "Keine Messstellen gefunden."
         }
+        seedDefaultFavoritesIfNeeded()
         isLoadingStations = false
+    }
+
+    /// On first launch there are no saved locations; pre-populate a few
+    /// recognisable Bavarian waters so the detail screen has content.
+    private func seedDefaultFavoritesIfNeeded() {
+        guard favoriteIDs.isEmpty, !stations.isEmpty else { return }
+        let preferred = ["Walchensee", "Isar", "Starnberger See", "Chiemsee", "Tegernsee"]
+        var seeded: [String] = []
+        for name in preferred {
+            if let match = stations.first(where: { $0.waterBodyName == name }) {
+                seeded.append(match.id)
+            }
+        }
+        if seeded.isEmpty { seeded = Array(stations.prefix(3)).map(\.id) }
+        favoriteIDs = Set(seeded)
+        favoriteOrder = seeded
+        saveFavorites()
     }
 
     func station(withID id: String) -> MeasurementStation? {
@@ -42,7 +64,7 @@ final class WaterRepository: ObservableObject {
     }
 
     var favoriteStations: [MeasurementStation] {
-        stations.filter { favoriteIDs.contains($0.id) }
+        favoriteOrder.compactMap { id in stations.first { $0.id == id } }
     }
 
     func stations(matching query: String) -> [MeasurementStation] {
@@ -62,9 +84,17 @@ final class WaterRepository: ObservableObject {
            Date().timeIntervalSince(cached.fetchedAt) < conditionsTTL {
             return cached.value
         }
-        let conditions = try await registry.fetchCurrentConditions(for: station)
-        conditionsCache[station.id] = (conditions, Date())
-        return conditions
+        // Hydrology and weather are fetched concurrently from independent
+        // providers, then merged — neither blocks the other.
+        async let hydrology = registry.fetchCurrentConditions(for: station)
+        async let weather = weatherProvider.currentWeather(at: station.coordinate)
+        let base = try await hydrology
+        let merged = StationConditions(stationID: base.stationID,
+                                       latest: base.latest,
+                                       weather: await weather,
+                                       fetchedAt: base.fetchedAt)
+        conditionsCache[station.id] = (merged, Date())
+        return merged
     }
 
     func timeSeries(for station: MeasurementStation,
@@ -82,21 +112,34 @@ final class WaterRepository: ObservableObject {
     func toggleFavorite(_ station: MeasurementStation) {
         if favoriteIDs.contains(station.id) {
             favoriteIDs.remove(station.id)
+            favoriteOrder.removeAll { $0 == station.id }
         } else {
             favoriteIDs.insert(station.id)
+            favoriteOrder.append(station.id)
         }
         saveFavorites()
     }
 
-    private func loadFavorites() {
-        if let data = UserDefaults.standard.data(forKey: favoritesKey),
-           let ids = try? JSONDecoder().decode(Set<String>.self, from: data) {
-            favoriteIDs = ids
+    /// Adds a station to the saved list if absent and returns it (for search).
+    @discardableResult
+    func addFavorite(_ station: MeasurementStation) -> MeasurementStation {
+        if !favoriteIDs.contains(station.id) {
+            favoriteIDs.insert(station.id)
+            favoriteOrder.append(station.id)
+            saveFavorites()
         }
+        return station
+    }
+
+    private func loadFavorites() {
+        guard let data = UserDefaults.standard.data(forKey: favoritesKey),
+              let ids = try? JSONDecoder().decode([String].self, from: data) else { return }
+        favoriteOrder = ids
+        favoriteIDs = Set(ids)
     }
 
     private func saveFavorites() {
-        if let data = try? JSONEncoder().encode(favoriteIDs) {
+        if let data = try? JSONEncoder().encode(favoriteOrder) {
             UserDefaults.standard.set(data, forKey: favoritesKey)
         }
     }
