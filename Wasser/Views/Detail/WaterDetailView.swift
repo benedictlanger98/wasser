@@ -63,8 +63,10 @@ struct WaterDetailView: View {
                 Text("°").font(.system(size: 40, weight: .light)).padding(.top, 10)
             }
             Text(conditionText).font(.system(size: 21, weight: .medium))
-            Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
-                .font(.system(size: 18, weight: .semibold)).opacity(0.92)
+            if c?.daily.isEmpty == false {
+                Text("Max. \(maxMin.hi)°  Min. \(maxMin.lo)°")
+                    .font(.system(size: 18, weight: .semibold)).opacity(0.92)
+            }
             if let air = c?.weather?.temperature {
                 Label("Luft \(Fmt.f0(air))°", systemImage: "drop")
                     .font(.system(size: 13, weight: .semibold))
@@ -99,8 +101,12 @@ struct WaterDetailView: View {
     @ViewBuilder
     private func cards(_ c: LocationConditions) -> some View {
         VStack(spacing: 11) {
-            HourlyTemperatureCard(hourly: c.hourly)
-            DailyTrendCard(days: c.daily)
+            if !c.hourly.isEmpty {
+                HourlyTemperatureCard(hourly: c.hourly)
+            }
+            if !c.daily.isEmpty {
+                DailyTrendCard(days: c.daily)
+            }
             LazyVGrid(columns: columns, spacing: 11) {
                 AirWaterCard(water: c.waterTemperature, air: c.weather?.temperature)
                 UVCard(index: c.weather?.uvIndex ?? 0, category: c.weather?.uvCategory ?? "–")
