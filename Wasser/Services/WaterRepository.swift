@@ -47,9 +47,17 @@ final class WaterRepository: ObservableObject {
     private func seedDefaultFavoritesIfNeeded() {
         guard favoriteIDs.isEmpty, !stations.isEmpty else { return }
         let preferred = ["Walchensee", "Isar", "Starnberger See", "Chiemsee", "Tegernsee"]
+        // Match on a normalised key (diacritics folded, non-alphanumerics
+        // dropped) so the scraped names ("StarnbergerSee") still resolve.
+        func key(_ s: String) -> String {
+            s.folding(options: .diacriticInsensitive, locale: .current)
+                .lowercased()
+                .filter { $0.isLetter || $0.isNumber }
+        }
         var seeded: [String] = []
         for name in preferred {
-            if let match = stations.first(where: { $0.waterBodyName == name }) {
+            let target = key(name)
+            if let match = stations.first(where: { key($0.waterBodyName) == target }) {
                 seeded.append(match.id)
             }
         }

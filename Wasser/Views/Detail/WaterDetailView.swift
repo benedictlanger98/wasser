@@ -45,7 +45,7 @@ struct WaterDetailView: View {
         return VStack(spacing: 2) {
             Text(viewModel.station.waterBodyName)
                 .font(.system(size: 32, weight: .medium))
-            Text(viewModel.station.region ?? viewModel.station.name)
+            Text(viewModel.station.locationSubtitle)
                 .font(.system(size: 14, weight: .semibold)).tracking(0.6).opacity(0.85)
             HStack(alignment: .top, spacing: 0) {
                 Text("\(Fmt.f0(c?.waterTemperature ?? 0))")

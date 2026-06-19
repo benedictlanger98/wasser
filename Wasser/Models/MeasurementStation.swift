@@ -41,4 +41,17 @@ extension MeasurementStation {
     static func makeID(dataSourceID: String, externalID: String) -> String {
         "\(dataSourceID).\(externalID)"
     }
+
+    /// Location line shown under the water-body title on the hero and cards.
+    /// Prefers the specific measuring point (Messstelle) with district context;
+    /// the broad Regierungsbezirk ("Oberbayern") alone isn't informative.
+    var locationSubtitle: String {
+        if !name.isEmpty, name != waterBodyName {
+            if let region, !region.isEmpty, region != name {
+                return "\(name) · \(region)"
+            }
+            return name
+        }
+        return region ?? name
+    }
 }

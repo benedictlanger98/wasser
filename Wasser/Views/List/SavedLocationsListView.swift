@@ -80,7 +80,7 @@ struct SavedLocationCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading) {
                     Text(station.waterBodyName).font(.system(size: 23, weight: .semibold))
-                    Text(station.region ?? station.name).font(.system(size: 13, weight: .medium)).opacity(0.9)
+                    Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
                     Spacer()
                     Text(conditionText).font(.system(size: 14, weight: .medium)).opacity(0.95)
                 }
