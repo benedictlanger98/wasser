@@ -38,8 +38,8 @@ enum GKDParser {
             // Datum | <value>. The current value is the right-most numeric cell
             // (the date cell never parses as a number), and the Landkreis
             // abbreviation in column 3 is the only region hint the table gives.
-            let stationName = stripTags(cells[0])
-            let waterBodyName = cells.count > 1 ? stripTags(cells[1]) : ""
+            let stationName = spacedName(stripTags(cells[0]))
+            let waterBodyName = cells.count > 1 ? spacedName(stripTags(cells[1])) : ""
             let district = cells.count > 2 ? stripTags(cells[2]) : ""
             let value = cells.reversed().compactMap { germanDouble(stripTags($0)) }.first
             // The "Datum" column carries the observation time of the current
@@ -89,6 +89,23 @@ enum GKDParser {
         return result
     }
 
+    /// Parses a GKD "Jahresgrafik"/Tageswerte table whose rows are
+    /// `Datum | Mittel | Maximum | Minimum` at daily resolution (date only, no
+    /// time). Verified live 2026-06.
+    static func parseDailyTable(html: String) -> [DailyAggregate] {
+        var result: [DailyAggregate] = []
+        for rowHTML in tagContents(of: "tr", in: html) {
+            let cells = tagContents(of: "td", in: rowHTML).map { stripTags($0) }
+            guard cells.count >= 4,
+                  let date = germanDate(cells[0]),
+                  let mean = germanDouble(cells[1]) else { continue }
+            let high = germanDouble(cells[2]) ?? mean
+            let low = germanDouble(cells[3]) ?? mean
+            result.append(DailyAggregate(date: date, mean: mean, high: high, low: low))
+        }
+        return result
+    }
+
     // MARK: - Lightweight HTML helpers
 
     /// Returns the inner HTML of every `<tag ...>...</tag>` occurrence.
@@ -103,6 +120,15 @@ enum GKDParser {
             guard match.numberOfRanges > 1, let r = Range(match.range(at: 1), in: html) else { return nil }
             return String(html[r])
         }
+    }
+
+    /// Inserts a space where a lowercase letter is immediately followed by an
+    /// uppercase one ("StarnbergerSee" → "Starnberger See"); GKD sometimes drops
+    /// the space in compound water-body names.
+    static func spacedName(_ string: String) -> String {
+        string.replacingOccurrences(of: "(?<=\\p{Ll})(?=\\p{Lu})",
+                                    with: " ",
+                                    options: .regularExpression)
     }
 
     /// First `href` attribute value found in a fragment.
@@ -154,6 +180,19 @@ enum GKDParser {
         formatter.dateFormat = "dd.MM.yyyy HH:mm"
         return formatter
     }()
+
+    private static let germanDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_DE")
+        formatter.timeZone = TimeZone(identifier: "Europe/Berlin")
+        formatter.dateFormat = "dd.MM.yyyy"
+        return formatter
+    }()
+
+    /// Parses a date-only German timestamp ("19.06.2026").
+    static func germanDate(_ string: String) -> Date? {
+        germanDayFormatter.date(from: string.trimmingCharacters(in: .whitespaces))
+    }
 
     static func germanDateTime(_ string: String) -> Date? {
         // Verified live 2026-06: GKD renders timestamps as

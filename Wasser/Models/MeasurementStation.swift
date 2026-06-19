@@ -51,16 +51,10 @@ extension MeasurementStation {
         return Double(hash % 10_000) / 10_000.0
     }
 
-    /// Location line shown under the water-body title on the hero and cards.
-    /// Prefers the specific measuring point (Messstelle) with district context;
-    /// the broad Regierungsbezirk ("Oberbayern") alone isn't informative.
+    /// Location line shown small under the (big) water-body title: the specific
+    /// measuring point (Messstelle). District abbreviations are intentionally
+    /// omitted. Empty when the Messstelle is just the water-body name again.
     var locationSubtitle: String {
-        if !name.isEmpty, name != waterBodyName {
-            if let region, !region.isEmpty, region != name {
-                return "\(name) · \(region)"
-            }
-            return name
-        }
-        return region ?? name
+        name == waterBodyName ? "" : name
     }
 }

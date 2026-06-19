@@ -28,4 +28,21 @@ enum Fmt {
         f.dateFormat = "H"
         return f.string(from: date)
     }
+
+    private static let berlin = TimeZone(identifier: "Europe/Berlin")!
+
+    /// Short German weekday, e.g. "Mo", "Di".
+    static func weekdayShort(_ date: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = berlin
+        let idx = cal.component(.weekday, from: date) - 1
+        return ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][idx]
+    }
+
+    /// True if `date` is today in the Bavarian timezone.
+    static func isToday(_ date: Date) -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = berlin
+        return cal.isDateInToday(date)
+    }
 }

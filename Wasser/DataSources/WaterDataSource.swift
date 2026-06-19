@@ -45,4 +45,16 @@ protocol WaterDataSource: Sendable {
     func fetchTimeSeries(for station: MeasurementStation,
                          parameter: MeasurementParameter,
                          range: TimeRange) async throws -> TimeSeries
+
+    /// Recent daily aggregates (mean/max/min), newest first, for the multi-day
+    /// trend. Optional: sources without daily data return an empty array.
+    func fetchDailyTrend(for station: MeasurementStation,
+                         parameter: MeasurementParameter,
+                         days: Int) async throws -> [DailyAggregate]
+}
+
+extension WaterDataSource {
+    func fetchDailyTrend(for station: MeasurementStation,
+                         parameter: MeasurementParameter,
+                         days: Int) async throws -> [DailyAggregate] { [] }
 }

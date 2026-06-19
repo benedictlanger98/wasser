@@ -49,42 +49,42 @@ enum GKDEndpoints {
         return c.url!
     }
 
-    /// The "messwerte" (current values) tab for a station.
-    ///
-    /// Verified live 2026-06: overview links already point straight at the
-    /// messwerte tab (".../<place-slug>-<nr>/messwerte?method=tabellen"), so the
-    /// captured detail URL is used as-is — preserving its query, which selects
-    /// the table view. Only a bare station URL gets the tab appended.
-    static func messwerte(for station: MeasurementStation,
-                          parameter: MeasurementParameter) -> URL? {
-        guard let detail = station.detailURL else { return nil }
-        if detail.lastPathComponent == "messwerte" { return detail }
-        return detail.appendingPathComponent("messwerte")
+    /// A data view ("tab") on a GKD station page. Verified live 2026-06: these
+    /// are sibling paths under the same station, e.g.
+    /// `.../<station>/messwerte/tabelle`, `.../<station>/jahreswerte`.
+    enum Tab {
+        case recentTable   // messwerte/tabelle — recent values at 15-min resolution
+        case yearTable     // jahreswerte — daily mean/max/min over the year
+
+        var path: String {
+            switch self {
+            case .recentTable: return "messwerte/tabelle"
+            case .yearTable:   return "jahreswerte"
+            }
+        }
     }
 
-    /// CSV / time-series download endpoint for a station.
-    ///
-    /// Verified live 2026-06: the download lives at a sibling of "messwerte"
-    /// (".../<place-slug>-<nr>/download"), NOT at ".../messwerte/download". The
-    /// page is a POST form gated by mandatory terms/privacy checkboxes; it
-    /// exports ISO-8859-1 CSV, offers only fixed periods (Aktueller Monat /
-    /// Aktuelles Jahr / Gesamtzeitraum) and delivers custom ranges
-    /// asynchronously by e-mail — so a plain GET with date-range query params
-    /// (the previous guess) cannot drive it. This returns the canonical
-    /// endpoint URL; `GKDScraper.timeSeries` treats it as best-effort and falls
-    /// back to scraping the rendered table when the GET yields no CSV. Wire up
-    /// the POST contract here once it is implemented.
-    static func download(for station: MeasurementStation,
-                         parameter: MeasurementParameter,
-                         range: TimeRange) -> URL? {
+    /// Builds the URL of a data tab for a *given parameter* at the same physical
+    /// station as `station.detailURL`. Verified live 2026-06: water level and
+    /// discharge for one location reuse the very same Messstellennummer — only
+    /// the parameter slug in the path changes
+    /// (`.../<category>/<paramSlug>/<region>/<station>/<tab>`), so we swap that
+    /// one path component and append the tab.
+    static func dataURL(for station: MeasurementStation,
+                        parameter: MeasurementParameter,
+                        tab: Tab) -> URL? {
         guard let detail = station.detailURL else { return nil }
-        let stationDir = detail.lastPathComponent == "messwerte"
-            ? detail.deletingLastPathComponent()
-            : detail
-        guard var components = URLComponents(
-            url: stationDir.appendingPathComponent("download"),
-            resolvingAgainstBaseURL: false) else { return nil }
-        components.query = nil
-        return components.url
+        let comps = detail.pathComponents.filter { $0 != "/" && !$0.isEmpty }
+        // station component = trailing "...-<number>"; the parameter slug sits
+        // two segments earlier (.../<category>/<paramSlug>/<region>/<station>).
+        guard let stationIdx = comps.firstIndex(where: {
+                  $0.range(of: "[0-9]{3,}$", options: .regularExpression) != nil
+              }), stationIdx >= 2 else { return nil }
+        var parts = Array(comps[0...stationIdx])
+        parts[stationIdx - 2] = slug(for: parameter)
+        var c = base()
+        c.path = "/" + parts.joined(separator: "/") + "/" + tab.path
+        return c.url
     }
+
 }
