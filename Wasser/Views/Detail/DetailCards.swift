@@ -6,6 +6,7 @@ import SwiftUI
 /// two horizontal reference gridlines and time markers along the bottom.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
+    @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
         let values = hourly.map(\.value)
@@ -23,7 +24,7 @@ struct HourlyTemperatureCard: View {
                         .foregroundStyle(.white.opacity(0.62))
                     Spacer()
                     if let now = hourly.last {
-                        Text("\(Fmt.f1(now.value))°")
+                        Text("\(Fmt.temp1(now.value, unit))°")
                             .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                     }
                 }
@@ -75,7 +76,7 @@ struct HourlyTemperatureCard: View {
                         }
                         .stroke(Color.white.opacity(0.16),
                                 style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                        Text("\(Fmt.f0(value))°")
+                        Text("\(Fmt.temp0(value, unit))°")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
                             .position(x: w - 12, y: y - 7)
@@ -116,6 +117,7 @@ struct HourlyTemperatureCard: View {
 
 struct DailyTrendCard: View {
     let days: [DayTrend]
+    @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
         let all = days.flatMap { [$0.low, $0.high] }
@@ -149,7 +151,7 @@ struct DailyTrendCard: View {
         let span = hi - lo
         return HStack(spacing: 12) {
             Text(label(day)).font(.system(size: 17, weight: .semibold)).frame(width: 52, alignment: .leading)
-            Text("\(Fmt.f0(day.low))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
+            Text("\(Fmt.temp0(day.low, unit))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
             GeometryReader { geo in
                 let leading = (day.low - lo) / span * geo.size.width
                 let width = (day.high - day.low) / span * geo.size.width
@@ -164,7 +166,7 @@ struct DailyTrendCard: View {
                 }
             }
             .frame(height: 6)
-            Text("\(Fmt.f0(day.high))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
+            Text("\(Fmt.temp0(day.high, unit))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
         }
         .foregroundStyle(.white)
         .padding(.vertical, 9)
@@ -176,14 +178,15 @@ struct DailyTrendCard: View {
 struct AirWaterCard: View {
     let water: Double
     let air: Double?
+    @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "LUFT & WASSER", systemImage: "thermometer.variable.and.figure")
                 VStack(spacing: 9) {
-                    valueRow("Wasser", value: "\(Fmt.f1(water))°")
-                    valueRow("Luft", value: air.map { "\(Fmt.f0($0))°" } ?? "–")
+                    valueRow("Wasser", value: "\(Fmt.temp1(water, unit))°")
+                    valueRow("Luft", value: air.map { "\(Fmt.temp0($0, unit))°" } ?? "–")
                 }
                 .padding(.top, 13)
                 Text(note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 9)
@@ -195,7 +198,7 @@ struct AirWaterCard: View {
 
     private var note: String {
         guard let air else { return "Keine Luftdaten verfügbar" }
-        let diff = Int(air.rounded()) - Int(water.rounded())
+        let diff = Int(unit.convert(air).rounded()) - Int(unit.convert(water).rounded())
         return diff > 0 ? "Luft \(diff)° wärmer als Wasser" : "Wasser wärmer als die Luft"
     }
 
@@ -293,6 +296,7 @@ struct WindCard: View {
 struct BadehinweisCard: View {
     let comfort: SwimComfort
     let waterTemperature: Double
+    @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
         GlassCard(minHeight: smallCardMinHeight) {
@@ -304,7 +308,7 @@ struct BadehinweisCard: View {
                 Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("Wasser").font(.system(size: 13)).opacity(0.7)
-                    Text("\(Fmt.f1(waterTemperature))°").font(.system(size: 17, weight: .medium))
+                    Text("\(Fmt.temp1(waterTemperature, unit))°").font(.system(size: 17, weight: .medium))
                 }
             }
         }
@@ -377,8 +381,11 @@ struct AbflussCard: View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
-                Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light)).padding(.top, 8)
-                Text("m³/s").font(.system(size: 13)).opacity(0.72)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light))
+                    Text("m³/s").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                }
+                .padding(.top, 8)
                 if let delta = AnnualDelta.text(value: discharge.value, mean: annualMean,
                                                 unit: "m³/s", oneDecimal: true) {
                     Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
@@ -400,8 +407,11 @@ struct WasserstandCard: View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "WASSERSTAND", systemImage: "ruler")
-                Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light)).padding(.top, 8)
-                Text("cm").font(.system(size: 13)).opacity(0.72)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light))
+                    Text("cm").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                }
+                .padding(.top, 8)
                 if let delta = AnnualDelta.text(value: level.value, mean: annualMean,
                                                 unit: "cm", oneDecimal: false) {
                     Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)

@@ -119,8 +119,26 @@ in SwiftUI under `Views/` + `DesignSystem/`:
   web artifact), live filtering over the catalogue, tap-to-save.
 - **Root** (`Views/Root/`) — swipeable detail pager over a backdrop drawn from
   the active card's water theme (so over-scrolling reveals matching water tones,
-  not black), with the custom bottom bar (page dots in a Liquid Glass pill on
-  iOS 26 · list button) and sliding screen transitions, driven by `AppRouter`.
+  not black; the backdrop cross-fades gently between pages), with the custom
+  bottom bar (page dots in a Liquid Glass pill on iOS 26 · list button) and
+  sliding screen transitions, driven by `AppRouter`. Returning to the foreground
+  after ~20 min triggers `WaterRepository.refreshIfStale()`, which clears the
+  conditions cache and bumps `refreshToken`; the list cards and detail views key
+  their reload on that token.
+
+### Cross-cutting UI conventions
+
+- **Temperature unit** — the list's "•••" Liquid-Glass menu offers °C/°F (plus
+  list editing and a tip jar). The choice lives in `@AppStorage("useFahrenheit")`,
+  is published into the view tree via `EnvironmentValues.temperatureUnit`, and is
+  applied by `Fmt.temp0/temp1`. All temperature readouts read the environment, so
+  toggling updates them together; non-temperature units (cm, m³/s, km/h) are
+  unaffected.
+- **Data-source attribution** — `SourceFooter` credits GKD Bayern (and Apple
+  Weather on the detail screen) under the saved list and each detail screen.
+- **Launch** — the generated launch screen uses the `LaunchBackground` colour
+  (the lake-deep tone) and `RootView` shows that same gradient immediately, so
+  there is no white flash before the first paint.
 
 Per-type colour themes (`WaterTheme`) are ported verbatim from the mock. The
 original design handoff is kept in `Design/` (`Wassertemperatur.dc.html` plus

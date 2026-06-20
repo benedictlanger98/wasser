@@ -1,4 +1,34 @@
-import Foundation
+import SwiftUI
+
+/// The temperature unit the user selected in the list's "•••" menu. Stored in
+/// `@AppStorage("useFahrenheit")` and threaded through the view tree via the
+/// environment so every temperature readout updates together when it changes.
+enum TemperatureUnit: String {
+    case celsius, fahrenheit
+
+    /// Converts a Celsius value (the unit everything is stored/measured in) into
+    /// the display unit.
+    func convert(_ celsius: Double) -> Double {
+        self == .fahrenheit ? celsius * 9 / 5 + 32 : celsius
+    }
+
+    /// Converts a temperature *difference* (e.g. an axis span). Differences only
+    /// scale by 9/5 in Fahrenheit — they carry no +32 offset.
+    func convertDelta(_ celsiusDelta: Double) -> Double {
+        self == .fahrenheit ? celsiusDelta * 9 / 5 : celsiusDelta
+    }
+}
+
+private struct TemperatureUnitKey: EnvironmentKey {
+    static let defaultValue: TemperatureUnit = .celsius
+}
+
+extension EnvironmentValues {
+    var temperatureUnit: TemperatureUnit {
+        get { self[TemperatureUnitKey.self] }
+        set { self[TemperatureUnitKey.self] = newValue }
+    }
+}
 
 /// Number formatting helpers matching the design mock (German locale, comma
 /// decimal separator).
@@ -9,6 +39,17 @@ enum Fmt {
     /// One decimal place with comma, e.g. 18.42 → "18,4".
     static func f1(_ value: Double) -> String {
         String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+    }
+
+    /// A Celsius temperature rendered in the chosen unit as a rounded integer,
+    /// e.g. 18.4 °C → "18" or, in Fahrenheit, "65".
+    static func temp0(_ celsius: Double, _ unit: TemperatureUnit) -> String {
+        f0(unit.convert(celsius))
+    }
+
+    /// A Celsius temperature rendered in the chosen unit to one decimal.
+    static func temp1(_ celsius: Double, _ unit: TemperatureUnit) -> String {
+        f1(unit.convert(celsius))
     }
 
     /// "HH:mm" in the Bavarian timezone.
