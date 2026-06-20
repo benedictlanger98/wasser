@@ -61,6 +61,15 @@ enum Fmt {
         return f.string(from: date)
     }
 
+    /// "HH:mm" rounded to the nearest half hour (e.g. 11:13 → "11:00",
+    /// 11:18 → "11:30"). Berlin's offset is a whole hour, so rounding in
+    /// absolute time lands cleanly on wall-clock :00/:30 marks.
+    static func timeHalfHour(_ date: Date) -> String {
+        let halfHour: TimeInterval = 30 * 60
+        let snapped = (date.timeIntervalSinceReferenceDate / halfHour).rounded() * halfHour
+        return time(Date(timeIntervalSinceReferenceDate: snapped))
+    }
+
     /// Hour label for the hourly strip, e.g. 14 → "14".
     static func hour(_ date: Date) -> String {
         let f = DateFormatter()

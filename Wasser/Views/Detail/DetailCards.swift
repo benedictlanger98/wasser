@@ -2,8 +2,9 @@ import SwiftUI
 
 // MARK: - Hourly water temperature
 
-/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a line chart, with
-/// two horizontal reference gridlines and time markers along the bottom.
+/// WASSERTEMPERATUR · 24 STD — the last 24 hours of the 15-minute series as a
+/// line chart, with two horizontal reference gridlines and time markers (rounded
+/// to the nearest half hour) along the bottom.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
     @Environment(\.temperatureUnit) private var unit
@@ -19,7 +20,7 @@ struct HourlyTemperatureCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("WASSERTEMPERATUR HEUTE")
+                    Text("WASSERTEMPERATUR · 24 STD")
                         .font(.system(size: 13, weight: .semibold)).tracking(0.4)
                         .foregroundStyle(.white.opacity(0.62))
                     Spacer()
@@ -44,14 +45,20 @@ struct HourlyTemperatureCard: View {
     /// Two reference temperature lines at one-third and two-thirds height.
     private var gridFractions: [Double] { [1.0 / 3.0, 2.0 / 3.0] }
 
-    /// 0:00, three interpolated markers, then "Jetzt".
+    /// Four time markers across the ~24h span (each rounded to the nearest half
+    /// hour), then "Jetzt".
     private var timeLabels: [String] {
         guard let start = hourly.first?.timestamp,
               let end = hourly.last?.timestamp else { return [] }
         let span = end.timeIntervalSince(start)
-        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.time(start.addingTimeInterval(span * $0)) }
+        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.timeHalfHour(start.addingTimeInterval(span * $0)) }
         return labels + ["Jetzt"]
     }
+
+    /// Right inset reserved for the y-axis temperature labels: the line, its end
+    /// dot and the "Jetzt" marker stop this far short of the right edge so they
+    /// don't collide with those labels (which stay pinned at the edge).
+    private let axisInset: CGFloat = 30
 
     private var chart: some View {
         let pts = hourly
@@ -60,13 +67,15 @@ struct HourlyTemperatureCard: View {
         return VStack(spacing: 8) {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
+                let plotW = max(1, w - axisInset)
                 let n = pts.count
                 let pos: (Int) -> CGPoint = { i in
-                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
+                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * plotW,
                             y: h - CGFloat((pts[i].value - lo) / span) * h)
                 }
                 ZStack {
-                    // Reference gridlines + their temperature labels.
+                    // Reference gridlines (full width) + their temperature labels
+                    // (kept at the right edge — these do not move).
                     ForEach(gridFractions, id: \.self) { frac in
                         let y = h * CGFloat(frac)
                         let value = hi - span * frac
@@ -84,7 +93,7 @@ struct HourlyTemperatureCard: View {
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         for i in pts.indices { p.addLine(to: pos(i)) }
-                        p.addLine(to: CGPoint(x: w, y: h))
+                        p.addLine(to: CGPoint(x: plotW, y: h))
                         p.closeSubpath()
                     }
                     .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
@@ -109,6 +118,8 @@ struct HourlyTemperatureCard: View {
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.7))
+            // Match the chart's right inset so "Jetzt" sits under the line end.
+            .padding(.trailing, axisInset)
         }
     }
 }
