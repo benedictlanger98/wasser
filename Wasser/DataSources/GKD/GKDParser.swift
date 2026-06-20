@@ -66,9 +66,17 @@ enum GKDParser {
         var measurements: [Measurement] = []
         for rowHTML in tagContents(of: "tr", in: html) {
             let cells = tagContents(of: "td", in: rowHTML).map { stripTags($0) }
-            guard cells.count >= 2,
-                  let date = germanDateTime(cells[0]),
-                  let value = germanDouble(cells[1]) else { continue }
+            guard cells.count >= 2 else { continue }
+            // Be tolerant of extra columns. Some station tables carry a leading
+            // index, a trailing unit, or a multi-column layout, so don't assume
+            // the timestamp is column 0 and the value is column 1: take the
+            // first cell that parses as a datetime and the right-most other cell
+            // that parses as a number (mirroring the overview table's logic).
+            guard let dateIdx = cells.firstIndex(where: { germanDateTime($0) != nil }) else { continue }
+            let date = germanDateTime(cells[dateIdx])!
+            guard let value = cells.enumerated().reversed()
+                    .first(where: { $0.offset != dateIdx && germanDouble($0.element) != nil })
+                    .map({ germanDouble($0.element)! }) else { continue }
             measurements.append(Measurement(parameter: parameter, timestamp: date, value: value))
         }
         return measurements
