@@ -69,16 +69,12 @@ half4 waterCaustics(float2 position,
     float topMask = pow(uv.y, 1.3);
     col += uSun * c * uIntensity * (0.35 + 0.65 * topMask);
 
-    // Vertical god-rays, concentrated near the surface.
+    // Vertical god-rays, concentrated near the surface. A single noise lookup
+    // (the second sparkle/ray octave was dropped — it added scattered "bubble"
+    // specks and a second noise() call per pixel without reading as water).
     float ray = noise(float2(uv.x * 5.0 - uTime * 0.05, 0.0));
     ray = pow(ray, 2.2);
-    float ray2 = noise(float2(uv.x * 11.0 + uTime * 0.03, 5.0));
-    ray = ray * 0.7 + pow(ray2, 3.0) * 0.5;
     col += uSun * ray * pow(uv.y, 2.0) * uRays;
-
-    // Sparse surface sparkle (kept faint so foreground text stays legible).
-    float m = noise(uv * 40.0 + float2(uTime * 0.05, -uTime * 0.3));
-    col += uSun * smoothstep(0.965, 1.0, m) * 0.09;
 
     // Vignette.
     float vig = smoothstep(1.15, 0.25, length(uv - 0.5));

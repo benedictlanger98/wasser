@@ -6,6 +6,8 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var repository: WaterRepository
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("useFahrenheit") private var useFahrenheit = false
 
     var body: some View {
         ZStack {
@@ -15,6 +17,8 @@ struct RootView: View {
             backgroundView
 
             if repository.isLoadingStations && repository.stations.isEmpty {
+                // The themed gradient is already on screen, so no jarring white
+                // launch — just a quiet spinner over it.
                 ProgressView().tint(.white)
             } else {
                 detailLayer
@@ -31,10 +35,23 @@ struct RootView: View {
                     .zIndex(3)
             }
         }
+        .environment(\.temperatureUnit, useFahrenheit ? .fahrenheit : .celsius)
         .task {
             if repository.stations.isEmpty { await repository.loadStations() }
             if router.activeStationID == nil {
                 router.activeStationID = repository.favoriteStations.first?.id
+            }
+            // Keep the home-screen widgets in sync with what the app shows.
+            Task { await repository.publishWidgetData() }
+        }
+        // Re-fetch when the app comes back to the foreground after being idle,
+        // so stale readings refresh instead of lingering from a past session.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await repository.refreshIfStale()
+                    await repository.publishWidgetData()
+                }
             }
         }
     }
@@ -50,16 +67,15 @@ struct RootView: View {
 
     @ViewBuilder
     private var backgroundView: some View {
-        if let t = activeTheme {
-            let bottom = Color(red: t.deepRGB.0 * 0.45,
-                               green: t.deepRGB.1 * 0.45,
-                               blue: t.deepRGB.2 * 0.45)
-            LinearGradient(colors: [t.deep, bottom], startPoint: .top, endPoint: .bottom)
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.4), value: router.activeStationID)
-        } else {
-            Color.black.ignoresSafeArea()
-        }
+        let t = activeTheme ?? WaterTheme.forType(.lake)
+        let bottom = Color(red: t.deepRGB.0 * 0.45,
+                           green: t.deepRGB.1 * 0.45,
+                           blue: t.deepRGB.2 * 0.45)
+        LinearGradient(colors: [t.deep, bottom], startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
+            // A slower ease keeps the backdrop cross-fading gently as you swipe
+            // between pages, instead of snapping to the next page's tone.
+            .animation(.easeInOut(duration: 0.6), value: router.activeStationID)
     }
 
     // MARK: Detail pager + bottom bar
@@ -102,6 +118,7 @@ struct RootView: View {
                         }
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: router.activeStationID)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .modifier(GlassCapsule())

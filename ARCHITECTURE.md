@@ -90,6 +90,34 @@ the wrong assumptions corrected. Findings, in the order they were checked:
 `GKDStationCatalog` still guarantees the library is never empty, and
 `MockWaterDataSource` powers previews offline.
 
+## Widgets (`WasserWidgets` extension)
+
+Three configurable home-screen widgets (each lets the user pick a saved water
+body via an `AppIntent` configuration):
+
+1. **Wassertemperatur** (small) — current temperature + today's high/low.
+2. **Gewässer – Details** (medium) — current temperature + high/low + wind +
+   water level (where available).
+3. **Gewässer – Tagesverlauf** (medium/large) — current temperature + high/low
+   + a 24-hour line chart, matching the in-app Tagestrend.
+
+**Data flow.** The widget runs in its own process, so it never touches the GKD
+scraper or WeatherKit. Instead the app builds a compact `WidgetSnapshot`
+(`WaterRepository.publishWidgetData()`) and writes it to a shared **App Group**
+(`group.com.wasser.app`) on launch and on every foreground refresh; the widget
+only reads and renders it (`WidgetSharedStore`). The one piece of code compiled
+into both targets is `WasserShared/WidgetSharedModel.swift` — kept
+Foundation-only on purpose. Theme colours are baked into the snapshot so the
+widget can draw the matching gradient without importing `WaterTheme`.
+
+> **Manual setup in Xcode (one-off, can't be done headlessly):** open the
+> project, select both the `Wasser` and `WasserWidgetsExtension` targets and
+> confirm **Signing & Capabilities ▸ App Groups** contains `group.com.wasser.app`
+> (automatic signing registers it). If the extension reports it can't find
+> `WidgetSharedStore`, tick `WidgetSharedModel.swift`'s **Target Membership** for
+> the widget target. The widget target, embed phase, App Group entitlements and
+> Info.plist are already wired in `project.pbxproj`.
+
 ## Project format
 
 The Xcode project uses a **file-system-synchronized root group** (Xcode 16,
@@ -119,8 +147,26 @@ in SwiftUI under `Views/` + `DesignSystem/`:
   web artifact), live filtering over the catalogue, tap-to-save.
 - **Root** (`Views/Root/`) — swipeable detail pager over a backdrop drawn from
   the active card's water theme (so over-scrolling reveals matching water tones,
-  not black), with the custom bottom bar (page dots in a Liquid Glass pill on
-  iOS 26 · list button) and sliding screen transitions, driven by `AppRouter`.
+  not black; the backdrop cross-fades gently between pages), with the custom
+  bottom bar (page dots in a Liquid Glass pill on iOS 26 · list button) and
+  sliding screen transitions, driven by `AppRouter`. Returning to the foreground
+  after ~20 min triggers `WaterRepository.refreshIfStale()`, which clears the
+  conditions cache and bumps `refreshToken`; the list cards and detail views key
+  their reload on that token.
+
+### Cross-cutting UI conventions
+
+- **Temperature unit** — the list's "•••" Liquid-Glass menu offers °C/°F (plus
+  list editing and a tip jar). The choice lives in `@AppStorage("useFahrenheit")`,
+  is published into the view tree via `EnvironmentValues.temperatureUnit`, and is
+  applied by `Fmt.temp0/temp1`. All temperature readouts read the environment, so
+  toggling updates them together; non-temperature units (cm, m³/s, km/h) are
+  unaffected.
+- **Data-source attribution** — `SourceFooter` credits GKD Bayern (and Apple
+  Weather on the detail screen) under the saved list and each detail screen.
+- **Launch** — the generated launch screen uses the `LaunchBackground` colour
+  (the lake-deep tone) and `RootView` shows that same gradient immediately, so
+  there is no white flash before the first paint.
 
 Per-type colour themes (`WaterTheme`) are ported verbatim from the mock. The
 original design handoff is kept in `Design/` (`Wassertemperatur.dc.html` plus

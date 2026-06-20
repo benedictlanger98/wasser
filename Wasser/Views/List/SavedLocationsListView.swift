@@ -6,13 +6,14 @@ struct SavedLocationsListView: View {
     @EnvironmentObject private var repository: WaterRepository
     @EnvironmentObject private var router: AppRouter
     @State private var editMode: EditMode = .inactive
+    @AppStorage("useFahrenheit") private var useFahrenheit = false
+    @State private var showingTip = false
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             Color.black.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
                 header
-                searchField
                 List {
                     ForEach(repository.favoriteStations) { station in
                         SavedLocationCard(station: station)
@@ -27,12 +28,22 @@ struct SavedLocationsListView: View {
                     }
                     .onMove { repository.moveFavorite(fromOffsets: $0, toOffset: $1) }
                     .onDelete { repository.removeFavorites(atOffsets: $0) }
+
+                    // Data-source credit, then space for the sticky search bar.
+                    SourceFooter(includesWeather: false)
+                        .padding(.top, 10)
+                        .padding(.bottom, 96)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .environment(\.editMode, $editMode)
             }
+            stickySearchBar
         }
+        .sheet(isPresented: $showingTip) { TipJarView() }
     }
 
     private var header: some View {
@@ -40,19 +51,7 @@ struct SavedLocationsListView: View {
             Text("Gewässer")
                 .font(.system(size: 34, weight: .bold)).tracking(0.3)
             Spacer()
-            Button {
-                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
-            } label: {
-                Image(systemName: editMode.isEditing ? "checkmark.circle.fill" : "arrow.up.arrow.down.circle")
-                    .font(.system(size: 24, weight: .regular))
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .disabled(repository.favoriteStations.isEmpty)
-            Button { router.openSearch(fromList: true) } label: {
-                Image(systemName: "plus.circle")
-                    .font(.system(size: 24, weight: .regular))
-                    .symbolRenderingMode(.hierarchical)
-            }
+            menuButton
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 20)
@@ -60,27 +59,147 @@ struct SavedLocationsListView: View {
         .padding(.bottom, 8)
     }
 
-    private var searchField: some View {
+    /// Apple-style "•••" overflow menu in a Liquid-Glass circle: edit the list,
+    /// switch the temperature unit, or leave a tip.
+    private var menuButton: some View {
+        Menu {
+            Button {
+                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+            } label: {
+                Label(editMode.isEditing ? "Fertig" : "Liste bearbeiten",
+                      systemImage: editMode.isEditing ? "checkmark" : "pencil")
+            }
+            .disabled(repository.favoriteStations.isEmpty && !editMode.isEditing)
+
+            Picker("Einheit", selection: unitBinding) {
+                Text("°C  Celsius").tag(TemperatureUnit.celsius)
+                Text("°F  Fahrenheit").tag(TemperatureUnit.fahrenheit)
+            }
+
+            Section {
+                Button { showingTip = true } label: {
+                    Label("Trinkgeld geben", systemImage: "heart")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+        }
+        .modifier(ListGlassCircle())
+    }
+
+    private var unitBinding: Binding<TemperatureUnit> {
+        Binding(get: { useFahrenheit ? .fahrenheit : .celsius },
+                set: { useFahrenheit = ($0 == .fahrenheit) })
+    }
+
+    /// Search field pinned to the bottom edge (Apple Weather's sticky search),
+    /// tapping it opens the full search screen.
+    private var stickySearchBar: some View {
         Button { router.openSearch(fromList: true) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                 Text("Gewässer oder Ort suchen")
                 Spacer()
+                Image(systemName: "mic.fill").opacity(0.8)
             }
             .font(.system(size: 17))
-            .foregroundStyle(Color(white: 0.92).opacity(0.6))
-            .padding(.vertical, 9).padding(.horizontal, 12)
-            .background(Color(red: 0.46, green: 0.46, blue: 0.50).opacity(0.24),
-                        in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .foregroundStyle(Color(white: 0.95).opacity(0.7))
+            .padding(.vertical, 13).padding(.horizontal, 16)
+            .modifier(ListGlassCapsule())
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 14)
+        .padding(.bottom, 8)
+    }
+}
+
+/// Liquid-Glass circle (iOS 26+) with a frosted fallback, for the menu button.
+private struct ListGlassCircle: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+        }
+    }
+}
+
+/// Liquid-Glass capsule (iOS 26+) with a frosted fallback, for the sticky search.
+private struct ListGlassCapsule: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
+        }
+    }
+}
+
+/// A lightweight "tip jar" sheet. The real in-app-purchase products still need
+/// to be configured in App Store Connect and wired through StoreKit; until then
+/// this presents the intent and the tiers without charging.
+struct TipJarView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(Color(red: 0.4, green: 0.82, blue: 0.96))
+                .padding(.top, 36)
+            Text("Trinkgeld geben")
+                .font(.system(size: 24, weight: .bold))
+            Text("Wasser ist werbefrei und nutzt offene Daten. Wenn dir die App "
+                 + "gefällt, kannst du die Weiterentwicklung mit einem Trinkgeld "
+                 + "unterstützen.")
+                .font(.system(size: 15))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 28)
+            VStack(spacing: 12) {
+                tipButton("Kleines Trinkgeld", "1,99 €")
+                tipButton("Mittleres Trinkgeld", "4,99 €")
+                tipButton("Großes Trinkgeld", "9,99 €")
+            }
+            .padding(.horizontal, 24)
+            Spacer()
+            Button("Schließen") { dismiss() }
+                .padding(.bottom, 24)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func tipButton(_ title: String, _ price: String) -> some View {
+        Button {
+            // TODO: trigger the matching StoreKit purchase once products exist.
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(price).fontWeight(.semibold)
+            }
+            .font(.system(size: 16))
+            .padding(.vertical, 14).padding(.horizontal, 18)
+            .frame(maxWidth: .infinity)
+            .background(Color.primary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
 /// One 118pt gradient card with shimmer, name/region/condition and big temp.
 struct SavedLocationCard: View {
     @EnvironmentObject private var repository: WaterRepository
+    @Environment(\.temperatureUnit) private var unit
     let station: MeasurementStation
     @State private var waterTemp: Double?
     @State private var today: DailyAggregate?
@@ -112,11 +231,11 @@ struct SavedLocationCard: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing) {
-                    Text("\(Fmt.f0(waterTemp ?? 0))°")
+                    Text("\(Fmt.temp0(waterTemp ?? 0, unit))°")
                         .font(.system(size: 50, weight: .light))
                     Spacer()
                     if let today {
-                        Text("H:\(Fmt.f0(today.high))° T:\(Fmt.f0(today.low))°")
+                        Text("H:\(Fmt.temp0(today.high, unit))° T:\(Fmt.temp0(today.low, unit))°")
                             .font(.system(size: 13, weight: .semibold)).opacity(0.92)
                     }
                 }
@@ -128,9 +247,10 @@ struct SavedLocationCard: View {
         .frame(height: 118)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
-        .task(id: station.id) {
+        .task(id: "\(station.id)#\(repository.refreshToken)") {
             // The card only needs the current value and today's max/min — fetch
             // those directly rather than the full detail (no 15-min series).
+            // Keying on `refreshToken` re-runs this after a foreground refresh.
             async let conditions = try? repository.conditions(for: station)
             async let trend = try? repository.dailyTrend(for: station, parameter: .waterTemperature, days: 1)
             waterTemp = (await conditions)?.waterTemperature?.value
