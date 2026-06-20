@@ -41,12 +41,17 @@ struct RootView: View {
             if router.activeStationID == nil {
                 router.activeStationID = repository.favoriteStations.first?.id
             }
+            // Keep the home-screen widgets in sync with what the app shows.
+            Task { await repository.publishWidgetData() }
         }
         // Re-fetch when the app comes back to the foreground after being idle,
         // so stale readings refresh instead of lingering from a past session.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await repository.refreshIfStale() }
+                Task {
+                    await repository.refreshIfStale()
+                    await repository.publishWidgetData()
+                }
             }
         }
     }

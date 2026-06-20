@@ -90,6 +90,34 @@ the wrong assumptions corrected. Findings, in the order they were checked:
 `GKDStationCatalog` still guarantees the library is never empty, and
 `MockWaterDataSource` powers previews offline.
 
+## Widgets (`WasserWidgets` extension)
+
+Three configurable home-screen widgets (each lets the user pick a saved water
+body via an `AppIntent` configuration):
+
+1. **Wassertemperatur** (small) — current temperature + today's high/low.
+2. **Gewässer – Details** (medium) — current temperature + high/low + wind +
+   water level (where available).
+3. **Gewässer – Tagesverlauf** (medium/large) — current temperature + high/low
+   + a 24-hour line chart, matching the in-app Tagestrend.
+
+**Data flow.** The widget runs in its own process, so it never touches the GKD
+scraper or WeatherKit. Instead the app builds a compact `WidgetSnapshot`
+(`WaterRepository.publishWidgetData()`) and writes it to a shared **App Group**
+(`group.com.wasser.app`) on launch and on every foreground refresh; the widget
+only reads and renders it (`WidgetSharedStore`). The one piece of code compiled
+into both targets is `WasserShared/WidgetSharedModel.swift` — kept
+Foundation-only on purpose. Theme colours are baked into the snapshot so the
+widget can draw the matching gradient without importing `WaterTheme`.
+
+> **Manual setup in Xcode (one-off, can't be done headlessly):** open the
+> project, select both the `Wasser` and `WasserWidgetsExtension` targets and
+> confirm **Signing & Capabilities ▸ App Groups** contains `group.com.wasser.app`
+> (automatic signing registers it). If the extension reports it can't find
+> `WidgetSharedStore`, tick `WidgetSharedModel.swift`'s **Target Membership** for
+> the widget target. The widget target, embed phase, App Group entitlements and
+> Info.plist are already wired in `project.pbxproj`.
+
 ## Project format
 
 The Xcode project uses a **file-system-synchronized root group** (Xcode 16,
