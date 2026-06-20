@@ -51,12 +51,22 @@ final class StationDetailViewModel: ObservableObject {
                 ?? series?.latest?.value
                 ?? 0
 
-            // Hourly line: the 15-min series for the current day only. Left
-            // empty (card hidden) when no real series exists — e.g. lakes that
-            // are read manually rather than logged continuously. No synthetic
-            // placeholder.
-            let todayPoints = (series?.points ?? []).filter { Fmt.isToday($0.timestamp) }
-            let hourly = todayPoints.count >= 2 ? todayPoints : []
+            // Hourly line: the last 24 hours of the recent 15-min series,
+            // anchored on the *newest* reading rather than the calendar day.
+            // Anchoring on "today" collapsed stations whose latest data lags a
+            // few hours or straddles midnight down to just the last hour (the
+            // Tegernsee symptom); a rolling 24h window always shows a full day
+            // when the source has it. Still empty (card hidden) when there's no
+            // real series — e.g. manually-read lakes. No synthetic placeholder.
+            let recent = series?.points ?? []
+            let hourly: [Measurement]
+            if let newest = recent.last?.timestamp {
+                let cutoff = newest.addingTimeInterval(-24 * 60 * 60)
+                let window = recent.filter { $0.timestamp >= cutoff }
+                hourly = window.count >= 2 ? window : []
+            } else {
+                hourly = []
+            }
 
             // 10-day trend from real daily aggregates (newest first). Show the
             // card only when the data is recent (newest within ~14 days) so

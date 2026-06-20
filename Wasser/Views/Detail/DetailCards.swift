@@ -2,10 +2,12 @@ import SwiftUI
 
 // MARK: - Hourly water temperature
 
-/// WASSERTEMPERATUR HEUTE — current-day 15-minute series as a line chart, with
-/// two horizontal reference gridlines and time markers along the bottom.
+/// WASSERTEMPERATUR · 24 STD — the last 24 hours of the 15-minute series as a
+/// line chart, with two horizontal reference gridlines and time markers (rounded
+/// to the nearest half hour) along the bottom.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
+    @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
         let values = hourly.map(\.value)
@@ -18,12 +20,12 @@ struct HourlyTemperatureCard: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("WASSERTEMPERATUR HEUTE")
+                    Text("WASSERTEMPERATUR · 24 STD")
                         .font(.system(size: 13, weight: .semibold)).tracking(0.4)
                         .foregroundStyle(.white.opacity(0.62))
                     Spacer()
                     if let now = hourly.last {
-                        Text("\(Fmt.f1(now.value))°")
+                        Text("\(Fmt.temp1(now.value, unit))°")
                             .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                     }
                 }
@@ -43,14 +45,20 @@ struct HourlyTemperatureCard: View {
     /// Two reference temperature lines at one-third and two-thirds height.
     private var gridFractions: [Double] { [1.0 / 3.0, 2.0 / 3.0] }
 
-    /// 0:00, three interpolated markers, then "Jetzt".
+    /// Four time markers across the ~24h span (each rounded to the nearest half
+    /// hour), then "Jetzt".
     private var timeLabels: [String] {
         guard let start = hourly.first?.timestamp,
               let end = hourly.last?.timestamp else { return [] }
         let span = end.timeIntervalSince(start)
-        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.time(start.addingTimeInterval(span * $0)) }
+        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.timeHalfHour(start.addingTimeInterval(span * $0)) }
         return labels + ["Jetzt"]
     }
+
+    /// Right inset reserved for the y-axis temperature labels: the line, its end
+    /// dot and the "Jetzt" marker stop this far short of the right edge so they
+    /// don't collide with those labels (which stay pinned at the edge).
+    private let axisInset: CGFloat = 30
 
     private var chart: some View {
         let pts = hourly
@@ -59,13 +67,15 @@ struct HourlyTemperatureCard: View {
         return VStack(spacing: 8) {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
+                let plotW = max(1, w - axisInset)
                 let n = pts.count
                 let pos: (Int) -> CGPoint = { i in
-                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * w,
+                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * plotW,
                             y: h - CGFloat((pts[i].value - lo) / span) * h)
                 }
                 ZStack {
-                    // Reference gridlines + their temperature labels.
+                    // Reference gridlines (full width) + their temperature labels
+                    // (kept at the right edge — these do not move).
                     ForEach(gridFractions, id: \.self) { frac in
                         let y = h * CGFloat(frac)
                         let value = hi - span * frac
@@ -75,7 +85,7 @@ struct HourlyTemperatureCard: View {
                         }
                         .stroke(Color.white.opacity(0.16),
                                 style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                        Text("\(Fmt.f0(value))°")
+                        Text("\(Fmt.temp0(value, unit))°")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.5))
                             .position(x: w - 12, y: y - 7)
@@ -83,7 +93,7 @@ struct HourlyTemperatureCard: View {
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         for i in pts.indices { p.addLine(to: pos(i)) }
-                        p.addLine(to: CGPoint(x: w, y: h))
+                        p.addLine(to: CGPoint(x: plotW, y: h))
                         p.closeSubpath()
                     }
                     .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
@@ -108,6 +118,8 @@ struct HourlyTemperatureCard: View {
             }
             .font(.system(size: 12, weight: .medium))
             .foregroundStyle(.white.opacity(0.7))
+            // Match the chart's right inset so "Jetzt" sits under the line end.
+            .padding(.trailing, axisInset)
         }
     }
 }
@@ -116,6 +128,7 @@ struct HourlyTemperatureCard: View {
 
 struct DailyTrendCard: View {
     let days: [DayTrend]
+    @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
         let all = days.flatMap { [$0.low, $0.high] }
@@ -149,7 +162,7 @@ struct DailyTrendCard: View {
         let span = hi - lo
         return HStack(spacing: 12) {
             Text(label(day)).font(.system(size: 17, weight: .semibold)).frame(width: 52, alignment: .leading)
-            Text("\(Fmt.f0(day.low))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
+            Text("\(Fmt.temp0(day.low, unit))°").font(.system(size: 16)).opacity(0.6).frame(width: 34, alignment: .trailing)
             GeometryReader { geo in
                 let leading = (day.low - lo) / span * geo.size.width
                 let width = (day.high - day.low) / span * geo.size.width
@@ -164,7 +177,7 @@ struct DailyTrendCard: View {
                 }
             }
             .frame(height: 6)
-            Text("\(Fmt.f0(day.high))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
+            Text("\(Fmt.temp0(day.high, unit))°").font(.system(size: 16, weight: .medium)).frame(width: 34, alignment: .trailing)
         }
         .foregroundStyle(.white)
         .padding(.vertical, 9)
@@ -176,14 +189,15 @@ struct DailyTrendCard: View {
 struct AirWaterCard: View {
     let water: Double
     let air: Double?
+    @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "LUFT & WASSER", systemImage: "thermometer.variable.and.figure")
                 VStack(spacing: 9) {
-                    valueRow("Wasser", value: "\(Fmt.f1(water))°")
-                    valueRow("Luft", value: air.map { "\(Fmt.f0($0))°" } ?? "–")
+                    valueRow("Wasser", value: "\(Fmt.temp1(water, unit))°")
+                    valueRow("Luft", value: air.map { "\(Fmt.temp0($0, unit))°" } ?? "–")
                 }
                 .padding(.top, 13)
                 Text(note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 9)
@@ -195,7 +209,7 @@ struct AirWaterCard: View {
 
     private var note: String {
         guard let air else { return "Keine Luftdaten verfügbar" }
-        let diff = Int(air.rounded()) - Int(water.rounded())
+        let diff = Int(unit.convert(air).rounded()) - Int(unit.convert(water).rounded())
         return diff > 0 ? "Luft \(diff)° wärmer als Wasser" : "Wasser wärmer als die Luft"
     }
 
@@ -293,6 +307,7 @@ struct WindCard: View {
 struct BadehinweisCard: View {
     let comfort: SwimComfort
     let waterTemperature: Double
+    @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
         GlassCard(minHeight: smallCardMinHeight) {
@@ -304,7 +319,7 @@ struct BadehinweisCard: View {
                 Spacer(minLength: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("Wasser").font(.system(size: 13)).opacity(0.7)
-                    Text("\(Fmt.f1(waterTemperature))°").font(.system(size: 17, weight: .medium))
+                    Text("\(Fmt.temp1(waterTemperature, unit))°").font(.system(size: 17, weight: .medium))
                 }
             }
         }
@@ -377,8 +392,11 @@ struct AbflussCard: View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
-                Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light)).padding(.top, 8)
-                Text("m³/s").font(.system(size: 13)).opacity(0.72)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light))
+                    Text("m³/s").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                }
+                .padding(.top, 8)
                 if let delta = AnnualDelta.text(value: discharge.value, mean: annualMean,
                                                 unit: "m³/s", oneDecimal: true) {
                     Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
@@ -400,8 +418,11 @@ struct WasserstandCard: View {
         GlassCard(minHeight: smallCardMinHeight) {
             VStack(alignment: .leading, spacing: 0) {
                 CardHeader(title: "WASSERSTAND", systemImage: "ruler")
-                Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light)).padding(.top, 8)
-                Text("cm").font(.system(size: 13)).opacity(0.72)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light))
+                    Text("cm").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                }
+                .padding(.top, 8)
                 if let delta = AnnualDelta.text(value: level.value, mean: annualMean,
                                                 unit: "cm", oneDecimal: false) {
                     Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)

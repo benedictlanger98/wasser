@@ -13,6 +13,14 @@ final class WaterRepository: ObservableObject {
     @Published var favoriteIDs: Set<String> = []
     /// Saved stations in user/display order (the detail pager and list use this).
     @Published var favoriteOrder: [String] = []
+    /// Bumped whenever a full refresh happens; views key their `.task`/reload on
+    /// it so a foreground refresh re-fetches their conditions.
+    @Published private(set) var refreshToken = 0
+
+    /// When the data was last fully refreshed, and how long it may stay fresh
+    /// before a return-to-foreground triggers a re-fetch.
+    private var lastRefresh = Date()
+    private let staleAfter: TimeInterval = 60 * 20
 
     private let registry: DataSourceRegistry
     private let weatherProvider: WeatherProvider
@@ -39,7 +47,24 @@ final class WaterRepository: ObservableObject {
             lastError = "Keine Messstellen gefunden."
         }
         seedDefaultFavoritesIfNeeded()
+        lastRefresh = Date()
         isLoadingStations = false
+    }
+
+    /// Re-fetches everything if the data has gone stale (called when the app
+    /// returns to the foreground). Clears the conditions cache and bumps
+    /// `refreshToken` so the detail/list views reload their readings.
+    func refreshIfStale() async {
+        guard Date().timeIntervalSince(lastRefresh) > staleAfter else { return }
+        await refresh()
+    }
+
+    /// Forces a full refresh: drops cached conditions, reloads stations, and
+    /// signals observers to re-fetch.
+    func refresh() async {
+        conditionsCache.removeAll()
+        refreshToken &+= 1
+        await loadStations()
     }
 
     /// On first launch there are no saved locations; pre-populate a few

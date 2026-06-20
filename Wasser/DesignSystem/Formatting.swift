@@ -1,4 +1,34 @@
-import Foundation
+import SwiftUI
+
+/// The temperature unit the user selected in the list's "•••" menu. Stored in
+/// `@AppStorage("useFahrenheit")` and threaded through the view tree via the
+/// environment so every temperature readout updates together when it changes.
+enum TemperatureUnit: String {
+    case celsius, fahrenheit
+
+    /// Converts a Celsius value (the unit everything is stored/measured in) into
+    /// the display unit.
+    func convert(_ celsius: Double) -> Double {
+        self == .fahrenheit ? celsius * 9 / 5 + 32 : celsius
+    }
+
+    /// Converts a temperature *difference* (e.g. an axis span). Differences only
+    /// scale by 9/5 in Fahrenheit — they carry no +32 offset.
+    func convertDelta(_ celsiusDelta: Double) -> Double {
+        self == .fahrenheit ? celsiusDelta * 9 / 5 : celsiusDelta
+    }
+}
+
+private struct TemperatureUnitKey: EnvironmentKey {
+    static let defaultValue: TemperatureUnit = .celsius
+}
+
+extension EnvironmentValues {
+    var temperatureUnit: TemperatureUnit {
+        get { self[TemperatureUnitKey.self] }
+        set { self[TemperatureUnitKey.self] = newValue }
+    }
+}
 
 /// Number formatting helpers matching the design mock (German locale, comma
 /// decimal separator).
@@ -11,6 +41,17 @@ enum Fmt {
         String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
     }
 
+    /// A Celsius temperature rendered in the chosen unit as a rounded integer,
+    /// e.g. 18.4 °C → "18" or, in Fahrenheit, "65".
+    static func temp0(_ celsius: Double, _ unit: TemperatureUnit) -> String {
+        f0(unit.convert(celsius))
+    }
+
+    /// A Celsius temperature rendered in the chosen unit to one decimal.
+    static func temp1(_ celsius: Double, _ unit: TemperatureUnit) -> String {
+        f1(unit.convert(celsius))
+    }
+
     /// "HH:mm" in the Bavarian timezone.
     static func time(_ date: Date) -> String {
         let f = DateFormatter()
@@ -18,6 +59,15 @@ enum Fmt {
         f.timeZone = TimeZone(identifier: "Europe/Berlin")
         f.dateFormat = "HH:mm"
         return f.string(from: date)
+    }
+
+    /// "HH:mm" rounded to the nearest half hour (e.g. 11:13 → "11:00",
+    /// 11:18 → "11:30"). Berlin's offset is a whole hour, so rounding in
+    /// absolute time lands cleanly on wall-clock :00/:30 marks.
+    static func timeHalfHour(_ date: Date) -> String {
+        let halfHour: TimeInterval = 30 * 60
+        let snapped = (date.timeIntervalSinceReferenceDate / halfHour).rounded() * halfHour
+        return time(Date(timeIntervalSinceReferenceDate: snapped))
     }
 
     /// Hour label for the hourly strip, e.g. 14 → "14".

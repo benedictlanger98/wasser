@@ -5,9 +5,21 @@ import SwiftUI
 /// 10-day trend, and a two-column grid of condition cards.
 struct WaterDetailView: View {
     @ObservedObject var viewModel: StationDetailViewModel
+    @EnvironmentObject private var repository: WaterRepository
+    @Environment(\.temperatureUnit) private var unit
+
+    /// Scroll offset in the named scroll space: 0 at rest, negative as content
+    /// scrolls up. Drives the Apple-style collapse of the hero into a compact
+    /// pinned title.
+    @State private var scrollOffset: CGFloat = 0
 
     private let columns = [GridItem(.flexible(), spacing: 11),
                            GridItem(.flexible(), spacing: 11)]
+
+    /// 0 (hero fully expanded) … 1 (collapsed): the first ~150pt of scrolling.
+    private var collapse: CGFloat {
+        min(1, max(0, -scrollOffset / 150))
+    }
 
     var body: some View {
         ZStack {
@@ -15,6 +27,13 @@ struct WaterDetailView: View {
             legibilityOverlay
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
+                    // Tracks scroll offset for the collapse animation.
+                    GeometryReader { geo in
+                        Color.clear.preference(key: ScrollOffsetKey.self,
+                                               value: geo.frame(in: .named("detailScroll")).minY)
+                    }
+                    .frame(height: 0)
+
                     if let alert = viewModel.conditions?.weather?.alerts.first {
                         WeatherAlertBanner(alert: alert)
                             .padding(.horizontal, 14)
@@ -22,15 +41,56 @@ struct WaterDetailView: View {
                             .padding(.bottom, 2)
                     }
                     hero
+                        // Compress the big hero away as the user scrolls, so it
+                        // doesn't read double with the pinned compact title.
+                        .opacity(1 - Double(collapse))
+                        .scaleEffect(1 - 0.06 * collapse, anchor: .top)
                     Color.clear.frame(height: 118) // let the water show through
                     if let conditions = viewModel.conditions {
                         cards(conditions)
                     }
+                    SourceFooter()
+                        .padding(.top, 22)
                 }
                 .padding(.bottom, 130)
             }
+            .coordinateSpace(name: "detailScroll")
+            .onPreferenceChange(ScrollOffsetKey.self) { scrollOffset = $0 }
+
+            compactHeader
         }
         .task { await viewModel.load() }
+        .onChange(of: repository.refreshToken) { _, _ in
+            Task { await viewModel.reload() }
+        }
+    }
+
+    /// Apple-style condensed title that fades/slides in once the hero scrolls
+    /// away, keeping the location name (and temperature) visible at the top.
+    private var compactHeader: some View {
+        let c = viewModel.conditions
+        return VStack(spacing: 1) {
+            Text(viewModel.station.displayWaterBodyName)
+                .font(.system(size: 17, weight: .semibold))
+            HStack(spacing: 6) {
+                Text("\(Fmt.temp0(c?.waterTemperature ?? 0, unit))°")
+                    .font(.system(size: 15, weight: .medium))
+                if !conditionText.isEmpty {
+                    Text("·").opacity(0.5)
+                    Text(conditionText).font(.system(size: 14)).opacity(0.85)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 56)
+        .padding(.bottom, 10)
+        .background(.ultraThinMaterial.opacity(Double(collapse) * 0.9))
+        .opacity(Double(collapse))
+        .offset(y: (1 - collapse) * -8)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 
     /// Per-station themed hero: base water-type palette, varied by the station's
@@ -69,7 +129,7 @@ struct WaterDetailView: View {
                     .font(.system(size: 14, weight: .semibold)).tracking(0.6).opacity(0.85)
             }
             HStack(alignment: .top, spacing: 0) {
-                Text("\(Fmt.f0(c?.waterTemperature ?? 0))")
+                Text("\(Fmt.temp0(c?.waterTemperature ?? 0, unit))")
                     .font(.system(size: 96, weight: .light))
                 Text("°").font(.system(size: 40, weight: .light)).padding(.top, 10)
             }
@@ -79,7 +139,7 @@ struct WaterDetailView: View {
                     .font(.system(size: 18, weight: .semibold)).opacity(0.92)
             }
             if let air = c?.weather?.temperature {
-                Label("Luft \(Fmt.f0(air))°", systemImage: "drop")
+                Label("Luft \(Fmt.temp0(air, unit))°", systemImage: "drop")
                     .font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 12).padding(.vertical, 5)
                     .background(.white.opacity(0.16), in: Capsule())
@@ -103,7 +163,7 @@ struct WaterDetailView: View {
     private var maxMin: (hi: String, lo: String) {
         // Today's high/low (the daily trend is newest-first).
         guard let today = viewModel.conditions?.daily.first else { return ("–", "–") }
-        return (Fmt.f0(today.high), Fmt.f0(today.low))
+        return (Fmt.temp0(today.high, unit), Fmt.temp0(today.low, unit))
     }
 
     // MARK: Cards
@@ -141,5 +201,14 @@ struct WaterDetailView: View {
             }
         }
         .padding(.horizontal, 14)
+    }
+}
+
+/// Reports the top of the scroll content within the `detailScroll` coordinate
+/// space, so the hero can collapse into a compact title as the user scrolls.
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
