@@ -32,11 +32,11 @@ final class StationDetailViewModel: ObservableObject {
                                                                 parameter: .waterTemperature,
                                                                 range: .day)
             // Request a generous window (today + buffer for gaps/weekends) and
-            // keep the 10 most recent days below, so the trend reliably fills
-            // all ten rows rather than dropping to ~7 on sparse days.
+            // keep the 7 most recent days below, so the trend reliably fills
+            // all seven rows rather than dropping to ~5 on sparse days.
             async let dailyAggregates = try? repository.dailyTrend(for: station,
                                                                    parameter: .waterTemperature,
-                                                                   days: 16)
+                                                                   days: 12)
             // Whole-year aggregates for the ± annual-mean readouts on the
             // Wasserstand / Abfluss cards (only fetched where the station
             // actually reports the parameter).
@@ -51,22 +51,14 @@ final class StationDetailViewModel: ObservableObject {
                 ?? series?.latest?.value
                 ?? 0
 
-            // Hourly line: the last 24 hours of the recent 15-min series,
-            // anchored on the *newest* reading rather than the calendar day.
-            // Anchoring on "today" collapsed stations whose latest data lags a
-            // few hours or straddles midnight down to just the last hour (the
-            // Tegernsee symptom); a rolling 24h window always shows a full day
-            // when the source has it. Still empty (card hidden) when there's no
-            // real series — e.g. manually-read lakes. No synthetic placeholder.
+            // Hourly line: strictly the last 24 hours ending NOW. The
+            // "Jetzt" marker on the chart always means right now — no
+            // fallback to "newest reading" anchoring. Stations whose data
+            // genuinely falls outside this window simply show no chart.
             let recent = series?.points ?? []
-            let hourly: [Measurement]
-            if let newest = recent.last?.timestamp {
-                let cutoff = newest.addingTimeInterval(-24 * 60 * 60)
-                let window = recent.filter { $0.timestamp >= cutoff }
-                hourly = window.count >= 2 ? window : []
-            } else {
-                hourly = []
-            }
+            let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+            let window = recent.filter { $0.timestamp >= cutoff }
+            let hourly: [Measurement] = window.count >= 2 ? window : []
 
             // 10-day trend from real daily aggregates (newest first). Show the
             // card only when the data is recent (newest within ~14 days) so
@@ -78,7 +70,7 @@ final class StationDetailViewModel: ObservableObject {
                 $0.date >= Date().addingTimeInterval(-14 * 86_400)
             } ?? false
             let daily: [DayTrend] = freshEnough
-                ? sorted.prefix(10).map { DayTrend(date: $0.date, low: $0.low, high: $0.high) }
+                ? sorted.prefix(7).map { DayTrend(date: $0.date, low: $0.low, high: $0.high) }
                 : []
 
             conditions = LocationConditions(

@@ -41,6 +41,13 @@ enum Fmt {
         String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
     }
 
+    /// Two decimal places with comma, e.g. 584.0 → "584,00". Used for
+    /// "m ü. NN" water-level readings where centimetre-scale variation
+    /// matters.
+    static func f2(_ value: Double) -> String {
+        String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",")
+    }
+
     /// A Celsius temperature rendered in the chosen unit as a rounded integer,
     /// e.g. 18.4 °C → "18" or, in Fahrenheit, "65".
     static func temp0(_ celsius: Double, _ unit: TemperatureUnit) -> String {

@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Aggregates one or more `WaterDataSource`s and routes requests to the source
@@ -54,5 +55,13 @@ actor DataSourceRegistry {
                          parameter: MeasurementParameter,
                          days: Int) async throws -> [DailyAggregate] {
         try await source(for: station).fetchDailyTrend(for: station, parameter: parameter, days: days)
+    }
+
+    /// Returns the best-known WGS84 coordinate for a station, routing to its
+    /// owning source so providers can lazily fetch and cache it. Falls back to
+    /// the station's stored coordinate if the source isn't registered.
+    func resolveCoordinate(for station: MeasurementStation) async -> CLLocationCoordinate2D {
+        guard let src = sources[station.dataSourceID] else { return station.coordinate }
+        return await src.resolveCoordinate(for: station)
     }
 }

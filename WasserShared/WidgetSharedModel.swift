@@ -5,8 +5,10 @@ import Foundation
 /// The widget runs in its own process and must stay lightweight, so it never
 /// touches the GKD scraper or WeatherKit. Instead the app fetches as usual and
 /// writes a compact `WidgetSnapshot` into the shared App Group container; the
-/// widget only reads and renders it. This file is the single piece of code
-/// compiled into *both* targets — keep it dependency-free (Foundation only).
+/// widget only reads and renders it. The widget is intentionally
+/// non-configurable: it always shows the first station from the saved
+/// favourites — the user changes which one by reordering the list in the
+/// app.
 public enum WidgetSharedStore {
     /// Must match the App Group capability enabled on both targets.
     public static let appGroupID = "group.com.wasser.app"
@@ -89,3 +91,4 @@ public struct WidgetPoint: Codable, Hashable, Sendable {
     public var v: Double
     public init(t: Date, v: Double) { self.t = t; self.v = v }
 }
+

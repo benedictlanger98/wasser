@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Session cache of the latest water-temperature reading scraped from the GKD
@@ -8,6 +9,68 @@ actor GKDLatestStore {
     private var values: [String: Measurement] = [:]
     func set(_ measurement: Measurement, for id: String) { values[id] = measurement }
     func value(for id: String) -> Measurement? { values[id] }
+}
+
+/// In-memory cache of full daily-aggregate series, keyed by station + parameter.
+/// The `jahreswerte/tabelle` page returns multiple years of daily rows so
+/// fetching and parsing it is expensive. The same series is needed twice
+/// per station load (7-day trend + annual mean), so without caching we'd
+/// hit GKD twice for the same payload. Entries are kept for a short TTL —
+/// daily aggregates don't change inside a single foreground session.
+actor GKDDailyAggregatesCache {
+    private struct Entry {
+        let aggregates: [DailyAggregate]
+        let fetchedAt: Date
+    }
+    private var entries: [String: Entry] = [:]
+    /// Daily aggregates only roll once per day; refreshing on app foreground
+    /// (which also clears `WaterRepository.conditionsCache`) is plenty.
+    private let ttl: TimeInterval = 60 * 60 * 6
+
+    private func key(_ stationID: String, _ parameter: MeasurementParameter) -> String {
+        "\(stationID).\(parameter.rawValue)"
+    }
+
+    func aggregates(stationID: String, parameter: MeasurementParameter) -> [DailyAggregate]? {
+        guard let entry = entries[key(stationID, parameter)],
+              Date().timeIntervalSince(entry.fetchedAt) < ttl else { return nil }
+        return entry.aggregates
+    }
+
+    func set(_ aggregates: [DailyAggregate], stationID: String, parameter: MeasurementParameter) {
+        entries[key(stationID, parameter)] = Entry(aggregates: aggregates, fetchedAt: Date())
+    }
+}
+
+/// Persistent (UserDefaults-backed) cache of resolved station coordinates
+/// keyed by externalID (Messstellennummer). Coordinates are expensive to
+/// resolve — each one is an extra HTTP fetch of the station's Stammdaten
+/// page — and they essentially never change for a given station, so caching
+/// across launches keeps weather lookups instant after first use.
+actor GKDCoordinateCache {
+    private static let key = "gkd_station_coordinates_v1"
+    private var inMemory: [String: CLLocationCoordinate2D]
+
+    init() {
+        var initial: [String: CLLocationCoordinate2D] = [:]
+        if let data = UserDefaults.standard.data(forKey: Self.key),
+           let dict = try? JSONDecoder().decode([String: [Double]].self, from: data) {
+            for (id, pair) in dict where pair.count == 2 {
+                initial[id] = CLLocationCoordinate2D(latitude: pair[0], longitude: pair[1])
+            }
+        }
+        self.inMemory = initial
+    }
+
+    func coordinate(for externalID: String) -> CLLocationCoordinate2D? { inMemory[externalID] }
+
+    func set(_ coord: CLLocationCoordinate2D, for externalID: String) {
+        inMemory[externalID] = coord
+        let dict = inMemory.mapValues { [$0.latitude, $0.longitude] }
+        if let data = try? JSONEncoder().encode(dict) {
+            UserDefaults.standard.set(data, forKey: Self.key)
+        }
+    }
 }
 
 /// `WaterDataSource` backed by the Gewässerkundlicher Dienst Bayern
@@ -28,6 +91,11 @@ struct GKDBayernDataSource: WaterDataSource {
     /// Current values harvested from the overview tables during `fetchStations`,
     /// reused by `fetchCurrentConditions` (the reliable source for lakes).
     private let latestStore = GKDLatestStore()
+    /// Persistent cache of station coordinates resolved from Stammdaten pages.
+    private let coordinateCache = GKDCoordinateCache()
+    /// Session cache of daily aggregates so the 7-day trend and the annual
+    /// mean don't double-fetch the same `jahreswerte/tabelle` page.
+    private let dailyCache = GKDDailyAggregatesCache()
 
     init(scraper: GKDScraper = GKDScraper(),
          useLiveCatalogue: Bool = true) {
@@ -140,7 +208,17 @@ struct GKDBayernDataSource: WaterDataSource {
     func fetchDailyTrend(for station: MeasurementStation,
                          parameter: MeasurementParameter,
                          days: Int) async throws -> [DailyAggregate] {
-        let all = await scraper.dailyAggregates(for: station, parameter: parameter)
+        // Reuse the cached full-year series when present (same scrape feeds
+        // both the 7-day trend and the annual mean → otherwise we'd hit
+        // `jahreswerte/tabelle` twice for the same payload).
+        let all: [DailyAggregate]
+        if let cached = await dailyCache.aggregates(stationID: station.id, parameter: parameter) {
+            all = cached
+        } else {
+            let fetched = await scraper.dailyAggregates(for: station, parameter: parameter)
+            await dailyCache.set(fetched, stationID: station.id, parameter: parameter)
+            all = fetched
+        }
         return Array(all.sorted { $0.date > $1.date }.prefix(days))   // newest first
     }
 
@@ -168,5 +246,27 @@ struct GKDBayernDataSource: WaterDataSource {
         return String(lower.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" })
             .replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    // MARK: - Coordinate resolution
+
+    /// Lazily resolves a station's coordinate. The overview scrape stores
+    /// `(0, 0)` because GKD's listing pages carry no location — this method
+    /// fetches and converts the Stammdaten Nordwert/Ostwert on first use, then
+    /// reuses the cached value forever after.
+    func resolveCoordinate(for station: MeasurementStation) async -> CLLocationCoordinate2D {
+        // Trust any coordinate already on the station (seed catalogue entries).
+        if abs(station.latitude) > 0.0001 || abs(station.longitude) > 0.0001 {
+            return station.coordinate
+        }
+        if let cached = await coordinateCache.coordinate(for: station.externalID) {
+            return cached
+        }
+        guard let raw = await scraper.stammdaten(for: station),
+              let coord = GKDProjection.wgs84(nordwert: raw.nordwert, ostwert: raw.ostwert) else {
+            return station.coordinate
+        }
+        await coordinateCache.set(coord, for: station.externalID)
+        return coord
     }
 }

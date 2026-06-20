@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// The saved-locations list (design's LIST screen): a large title, a tappable
@@ -11,7 +12,16 @@ struct SavedLocationsListView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    Color(red: 0.02, green: 0.07, blue: 0.11),
+                    Color(red: 0.03, green: 0.12, blue: 0.13),
+                    Color(red: 0.02, green: 0.10, blue: 0.09)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
                 header
                 List {
@@ -60,34 +70,47 @@ struct SavedLocationsListView: View {
     }
 
     /// Apple-style "•••" overflow menu in a Liquid-Glass circle: edit the list,
-    /// switch the temperature unit, or leave a tip.
+    /// switch the temperature unit, or leave a tip. While the list is in edit
+    /// mode the menu collapses into a single checkmark that exits editing.
+    @ViewBuilder
     private var menuButton: some View {
-        Menu {
+        if editMode.isEditing {
             Button {
-                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                withAnimation { editMode = .inactive }
             } label: {
-                Label(editMode.isEditing ? "Fertig" : "Liste bearbeiten",
-                      systemImage: editMode.isEditing ? "checkmark" : "pencil")
+                Image(systemName: "checkmark")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
             }
-            .disabled(repository.favoriteStations.isEmpty && !editMode.isEditing)
-
-            Picker("Einheit", selection: unitBinding) {
-                Text("°C  Celsius").tag(TemperatureUnit.celsius)
-                Text("°F  Fahrenheit").tag(TemperatureUnit.fahrenheit)
-            }
-
-            Section {
-                Button { showingTip = true } label: {
-                    Label("Trinkgeld geben", systemImage: "heart")
+            .modifier(ListGlassCircle())
+        } else {
+            Menu {
+                Button {
+                    withAnimation { editMode = .active }
+                } label: {
+                    Label("Liste bearbeiten", systemImage: "pencil")
                 }
+                .disabled(repository.favoriteStations.isEmpty)
+
+                Picker("Einheit", selection: unitBinding) {
+                    Text("°C  Celsius").tag(TemperatureUnit.celsius)
+                    Text("°F  Fahrenheit").tag(TemperatureUnit.fahrenheit)
+                }
+
+                Section {
+                    Button { showingTip = true } label: {
+                        Label("Trinkgeld geben", systemImage: "heart")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
             }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
+            .modifier(ListGlassCircle())
         }
-        .modifier(ListGlassCircle())
     }
 
     private var unitBinding: Binding<TemperatureUnit> {
@@ -143,11 +166,39 @@ private struct ListGlassCapsule: ViewModifier {
     }
 }
 
-/// A lightweight "tip jar" sheet. The real in-app-purchase products still need
-/// to be configured in App Store Connect and wired through StoreKit; until then
-/// this presents the intent and the tiers without charging.
+/// Tip jar sheet backed by StoreKit 2 consumables. Loads three IAP
+/// products from App Store Connect (or a local .storekit file in debug),
+/// displays their localised prices, and runs the purchase flow on tap.
+///
+/// **Setup required in App Store Connect** (or in a `Wasser.storekit`
+/// configuration file selected on the run scheme): three consumable
+/// in-app purchases with the product IDs listed in `Self.productIDs`.
+/// Without those configured, the sheet will show "Trinkgeld-Produkte
+/// werden noch geladen" instead of buttons.
 struct TipJarView: View {
     @Environment(\.dismiss) private var dismiss
+
+    /// Consumable in-app purchase IDs, sorted small → large. Must match
+    /// the products created in App Store Connect.
+    private static let productIDs: [String] = [
+        "com.wasser.app.tip.small",
+        "com.wasser.app.tip.medium",
+        "com.wasser.app.tip.large"
+    ]
+
+    /// Friendly title shown for each price tier, in the same order as
+    /// `productIDs`. Falls back to the product's StoreKit `displayName`
+    /// if it doesn't match an entry here.
+    private static let tierTitles: [String: String] = [
+        "com.wasser.app.tip.small":  "Kleines Trinkgeld",
+        "com.wasser.app.tip.medium": "Mittleres Trinkgeld",
+        "com.wasser.app.tip.large":  "Großes Trinkgeld"
+    ]
+
+    @State private var products: [Product] = []
+    @State private var purchasingID: String? = nil
+    @State private var message: String? = nil
+    @State private var hasLoaded = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -157,34 +208,70 @@ struct TipJarView: View {
                 .padding(.top, 36)
             Text("Trinkgeld geben")
                 .font(.system(size: 24, weight: .bold))
-            Text("Wasser ist werbefrei und nutzt offene Daten. Wenn dir die App "
-                 + "gefällt, kannst du die Weiterentwicklung mit einem Trinkgeld "
-                 + "unterstützen.")
+            Text("Wenn dir die App gefällt, gib gerne ein...")
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 28)
-            VStack(spacing: 12) {
-                tipButton("Kleines Trinkgeld", "1,99 €")
-                tipButton("Mittleres Trinkgeld", "4,99 €")
-                tipButton("Großes Trinkgeld", "9,99 €")
+
+            tierList
+
+            if let message {
+                Text(message)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 24)
+
             Spacer()
             Button("Schließen") { dismiss() }
                 .padding(.bottom, 24)
         }
         .presentationDetents([.medium, .large])
+        .task { await loadProducts() }
     }
 
-    private func tipButton(_ title: String, _ price: String) -> some View {
-        Button {
-            // TODO: trigger the matching StoreKit purchase once products exist.
+    @ViewBuilder
+    private var tierList: some View {
+        if products.isEmpty {
+            VStack(spacing: 6) {
+                if hasLoaded {
+                    Text("Trinkgeld-Produkte sind im App-Store-Connect-Setup noch nicht freigegeben.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    ProgressView()
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+        } else {
+            VStack(spacing: 12) {
+                ForEach(products, id: \.id) { product in
+                    tipButton(for: product)
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private func tipButton(for product: Product) -> some View {
+        let title = Self.tierTitles[product.id] ?? product.displayName
+        let isPurchasing = purchasingID == product.id
+        return Button {
+            Task { await purchase(product) }
         } label: {
             HStack {
                 Text(title)
                 Spacer()
-                Text(price).fontWeight(.semibold)
+                if isPurchasing {
+                    ProgressView()
+                } else {
+                    Text(product.displayPrice).fontWeight(.semibold)
+                }
             }
             .font(.system(size: 16))
             .padding(.vertical, 14).padding(.horizontal, 18)
@@ -193,6 +280,44 @@ struct TipJarView: View {
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
+        .disabled(purchasingID != nil)
+    }
+
+    private func loadProducts() async {
+        do {
+            let fetched = try await Product.products(for: Set(Self.productIDs))
+            // Keep the canonical small → medium → large order from productIDs.
+            products = Self.productIDs.compactMap { id in fetched.first { $0.id == id } }
+        } catch {
+            message = "Trinkgeld-Kasse konnte nicht geladen werden."
+        }
+        hasLoaded = true
+    }
+
+    private func purchase(_ product: Product) async {
+        purchasingID = product.id
+        defer { purchasingID = nil }
+        do {
+            let result = try await product.purchase()
+            switch result {
+            case .success(let verification):
+                switch verification {
+                case .verified(let transaction):
+                    await transaction.finish()
+                    withAnimation { message = "Vielen Dank für die Unterstützung! 🐳" }
+                case .unverified:
+                    message = "Zahlung konnte nicht verifiziert werden."
+                }
+            case .userCancelled:
+                break
+            case .pending:
+                message = "Zahlung wartet auf Bestätigung."
+            @unknown default:
+                break
+            }
+        } catch {
+            message = "Fehler beim Kauf: \(error.localizedDescription)"
+        }
     }
 }
 
@@ -227,7 +352,9 @@ struct SavedLocationCard: View {
                         Text(station.locationSubtitle).font(.system(size: 13, weight: .medium)).opacity(0.9)
                     }
                     Spacer()
-                    Text(conditionText).font(.system(size: 14, weight: .medium)).opacity(0.95)
+                    Text(conditionText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
                 }
                 Spacer()
                 VStack(alignment: .trailing) {
@@ -235,7 +362,7 @@ struct SavedLocationCard: View {
                         .font(.system(size: 50, weight: .light))
                     Spacer()
                     if let today {
-                        Text("H:\(Fmt.temp0(today.high, unit))° T:\(Fmt.temp0(today.low, unit))°")
+                        Text("H: \(Fmt.temp0(today.high, unit))° T: \(Fmt.temp0(today.low, unit))°")
                             .font(.system(size: 13, weight: .semibold)).opacity(0.92)
                     }
                 }
@@ -260,9 +387,9 @@ struct SavedLocationCard: View {
 
     private var conditionText: String {
         switch station.waterBodyType {
-        case .river: return "Strömung mäßig"
-        case .sea:   return "Leichte Brandung"
-        case .lake:  return "Klar · Ruhig"
+        case .river: return "Fluss"
+        case .sea:   return "Meer"
+        case .lake:  return "See"
         }
     }
 }

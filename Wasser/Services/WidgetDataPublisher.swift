@@ -20,13 +20,16 @@ extension WaterRepository {
 
         var entries: [WidgetStation] = []
         for station in stations {
-            guard let conditions = try? await self.conditions(for: station) else { continue }
-
+            // Always include every favorite so the widget picker can offer
+            // them, even if their conditions fetch fails. Placeholders are
+            // used for missing readings instead of silently dropping the
+            // station — otherwise the user picks a station in Edit Widget
+            // and the lookup falls back to "first".
+            let conditions = try? await self.conditions(for: station)
             let series = try? await timeSeries(for: station, parameter: .waterTemperature, range: .day)
             let recent = series?.points ?? []
-            let temp = conditions.waterTemperature?.value ?? series?.latest?.value ?? 0
+            let temp = conditions?.waterTemperature?.value ?? series?.latest?.value ?? 0
 
-            // Same rolling 24h window the detail chart uses.
             let hourly: [WidgetPoint]
             if let newest = recent.last?.timestamp {
                 let cutoff = newest.addingTimeInterval(-24 * 60 * 60)
@@ -53,14 +56,14 @@ extension WaterRepository {
                 currentTemp: temp,
                 todayHigh: today?.high,
                 todayLow: today?.low,
-                windSpeedKmh: conditions.weather?.windSpeed,
-                windCompass: conditions.weather?.windCompass,
-                waterLevelCm: conditions.waterLevel?.value,
+                windSpeedKmh: conditions?.weather?.windSpeed,
+                windCompass: conditions?.weather?.windCompass,
+                waterLevelCm: conditions?.waterLevel?.value,
                 conditionText: conditionText,
                 hourly: hourly,
                 deepRGB: [theme.deepRGB.0, theme.deepRGB.1, theme.deepRGB.2],
                 shallowRGB: [theme.shallowRGB.0, theme.shallowRGB.1, theme.shallowRGB.2],
-                updatedAt: conditions.observationTime ?? conditions.fetchedAt))
+                updatedAt: conditions?.observationTime ?? conditions?.fetchedAt ?? Date()))
         }
 
         let useFahrenheit = UserDefaults.standard.bool(forKey: "useFahrenheit")

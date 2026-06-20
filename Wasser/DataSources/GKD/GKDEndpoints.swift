@@ -49,19 +49,39 @@ enum GKDEndpoints {
         return c.url!
     }
 
-    /// A data view ("tab") on a GKD station page. Verified live 2026-06: these
-    /// are sibling paths under the same station, e.g.
-    /// `.../<station>/messwerte/tabelle`, `.../<station>/jahreswerte`.
+    /// A data view ("tab") on a GKD station page. Verified live 2026-06:
+    /// these are sibling paths under the same station, e.g.
+    /// `.../<station>/messwerte/tabelle`, `.../<station>/jahreswerte/tabelle`.
+    /// The `/jahreswerte/tabelle` view returns the actual daily mean/max/min
+    /// numbers used by the Jahresmittel calculation — the bare `/jahreswerte`
+    /// path was the chart view and didn't always agree with the table.
     enum Tab {
-        case recentTable   // messwerte/tabelle — recent values at 15-min resolution
-        case yearTable     // jahreswerte — daily mean/max/min over the year
+        case recentTable   // messwerte/tabelle — recent 15-min readings
+        case yearTable     // jahreswerte/tabelle — daily mean/max/min over the year
 
         var path: String {
             switch self {
             case .recentTable: return "messwerte/tabelle"
-            case .yearTable:   return "jahreswerte"
+            case .yearTable:   return "jahreswerte/tabelle"
             }
         }
+    }
+
+    /// URL that serves the station's Stammdaten (master-data) section. The
+    /// bare detail URL — `/de/<category>/<paramSlug>/<region>/<station>` —
+    /// already renders the Stammdaten table inline (incl. Nordwert / Ostwert),
+    /// so we just strip any trailing tab suffix (`messwerte/tabelle`, …) from
+    /// the stored detailURL and return the canonical path.
+    static func stammdataURL(for station: MeasurementStation) -> URL? {
+        guard let detail = station.detailURL else { return nil }
+        let comps = detail.pathComponents.filter { $0 != "/" && !$0.isEmpty }
+        guard let stationIdx = comps.firstIndex(where: {
+                  $0.range(of: "[0-9]{3,}$", options: .regularExpression) != nil
+              }) else { return nil }
+        let parts = Array(comps[0...stationIdx])
+        var c = base()
+        c.path = "/" + parts.joined(separator: "/")
+        return c.url
     }
 
     /// Builds the URL of a data tab for a *given parameter* at the same physical

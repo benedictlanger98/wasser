@@ -5,6 +5,21 @@ struct Measurement: Identifiable, Codable, Hashable, Sendable {
     let parameter: MeasurementParameter
     let timestamp: Date
     let value: Double
+    /// Unit string as the source published it (e.g. "cm", "m ü. NN",
+    /// "m³/s"). When non-nil it overrides the parameter's default unit —
+    /// GKD reports Wasserstand in cm for some stations and in m ü. NN for
+    /// others, so the value alone isn't enough to know how to label it.
+    let unit: String?
+
+    init(parameter: MeasurementParameter,
+         timestamp: Date,
+         value: Double,
+         unit: String? = nil) {
+        self.parameter = parameter
+        self.timestamp = timestamp
+        self.value = value
+        self.unit = unit
+    }
 
     /// Stable identity derived from parameter + timestamp so the same reading
     /// from two fetches de-duplicates cleanly.
@@ -15,7 +30,7 @@ struct Measurement: Identifiable, Codable, Hashable, Sendable {
         formatter.minimumFractionDigits = parameter.fractionDigits
         formatter.maximumFractionDigits = parameter.fractionDigits
         let number = formatter.string(from: value as NSNumber) ?? "\(value)"
-        return "\(number) \(parameter.unit)"
+        return "\(number) \(unit ?? parameter.unit)"
     }
 }
 

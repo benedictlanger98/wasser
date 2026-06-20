@@ -7,6 +7,16 @@ import SwiftUI
 /// to the nearest half hour) along the bottom.
 struct HourlyTemperatureCard: View {
     let hourly: [Measurement]
+    /// "Jetzt" position on the x-axis — typically `Date()`, but stations
+    /// whose latest reading is more than 24 h old supply the newest
+    /// timestamp so the chart still has a coherent window to render.
+    var anchor: Date = Date()
+    /// When `false`, the internal title row is omitted — the caller is
+    /// rendering it externally (as a sticky section header above the card).
+    var showHeader: Bool = true
+    /// Card corner style. `.bottom` is used when a sticky header sits flush
+    /// on top of this card and supplies the rounded top corners.
+    var corners: GlassCardCorners = .all
     @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
@@ -17,26 +27,28 @@ struct HourlyTemperatureCard: View {
     }
 
     var body: some View {
-        GlassCard {
+        GlassCard(corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("24-STUNDEN-TREND")
-                        .font(.system(size: 13, weight: .semibold)).tracking(0.4)
-                        .foregroundStyle(.white.opacity(0.62))
-                    Spacer()
-                    if let now = hourly.last {
-                        Text("\(Fmt.temp1(now.value, unit))°")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                if showHeader {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("24-STUNDEN-TREND")
+                            .font(.system(size: 13, weight: .semibold)).tracking(0.4)
+                            .foregroundStyle(.white.opacity(0.62))
+                        Spacer()
+                        if let now = hourly.last {
+                            Text("\(Fmt.temp1(now.value, unit))°")
+                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        }
                     }
+                    .padding(.bottom, 12)
+                    Divider().overlay(Color.white.opacity(0.14))
                 }
-                .padding(.bottom, 12)
-                Divider().overlay(Color.white.opacity(0.14))
                 if hourly.count >= 2 {
-                    chart.padding(.top, 16)
+                    chart.padding(.top, showHeader ? 16 : 0)
                 } else {
                     Text("Keine Verlaufsdaten verfügbar")
                         .font(.system(size: 14)).foregroundStyle(.white.opacity(0.6))
-                        .padding(.top, 16)
+                        .padding(.top, showHeader ? 16 : 0)
                 }
             }
         }
@@ -45,13 +57,15 @@ struct HourlyTemperatureCard: View {
     /// Two reference temperature lines at one-third and two-thirds height.
     private var gridFractions: [Double] { [1.0 / 3.0, 2.0 / 3.0] }
 
-    /// Four time markers across the ~24h span (each rounded to the nearest half
-    /// hour), then "Jetzt".
+    /// Time markers anchored to `anchor` (= "Jetzt" position). Five labels
+    /// span the 24 h window from `anchor - 24h` to `anchor`, with the last
+    /// label rendered as "Jetzt". For stations with fresh data anchor is
+    /// the current time; for stations whose data is hours/days stale the
+    /// anchor is the newest reading so the labels stay meaningful.
     private var timeLabels: [String] {
-        guard let start = hourly.first?.timestamp,
-              let end = hourly.last?.timestamp else { return [] }
-        let span = end.timeIntervalSince(start)
-        let labels = [0.0, 0.25, 0.5, 0.75].map { Fmt.timeHalfHour(start.addingTimeInterval(span * $0)) }
+        let labels = [0.0, 0.25, 0.5, 0.75].map { frac in
+            Fmt.timeHalfHour(anchor.addingTimeInterval(-24 * 3600 * (1 - frac)))
+        }
         return labels + ["Jetzt"]
     }
 
@@ -64,14 +78,20 @@ struct HourlyTemperatureCard: View {
         let pts = hourly
         let (lo, hi) = bounds
         let span = hi - lo
+        let windowStart = anchor.addingTimeInterval(-24 * 3600)
         return VStack(spacing: 8) {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 let plotW = max(1, w - axisInset)
                 let n = pts.count
+                // Each point is placed by its real timestamp inside the
+                // 24h-ending-now window. Stale data therefore stops short
+                // of the right edge instead of being stretched across it.
                 let pos: (Int) -> CGPoint = { i in
-                    CGPoint(x: n <= 1 ? 0 : CGFloat(i) / CGFloat(n - 1) * plotW,
-                            y: h - CGFloat((pts[i].value - lo) / span) * h)
+                    let t = pts[i].timestamp.timeIntervalSince(windowStart) / (24 * 3600)
+                    let frac = max(0, min(1, CGFloat(t)))
+                    return CGPoint(x: frac * plotW,
+                                   y: h - CGFloat((pts[i].value - lo) / span) * h)
                 }
                 ZStack {
                     // Reference gridlines (full width) + their temperature labels
@@ -90,23 +110,28 @@ struct HourlyTemperatureCard: View {
                             .foregroundStyle(.white.opacity(0.5))
                             .position(x: w - 12, y: y - 7)
                     }
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: h))
-                        for i in pts.indices { p.addLine(to: pos(i)) }
-                        p.addLine(to: CGPoint(x: plotW, y: h))
-                        p.closeSubpath()
+                    if n > 0 {
+                        // Fill closes back to the X of the last sample, not the
+                        // far-right edge, so the trace doesn't appear to extend
+                        // past the most recent reading.
+                        Path { p in
+                            p.move(to: CGPoint(x: pos(0).x, y: h))
+                            for i in pts.indices { p.addLine(to: pos(i)) }
+                            p.addLine(to: CGPoint(x: pos(n - 1).x, y: h))
+                            p.closeSubpath()
+                        }
+                        .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
+                                             startPoint: .top, endPoint: .bottom))
+                        Path { p in
+                            p.move(to: pos(0))
+                            for i in pts.indices.dropFirst() { p.addLine(to: pos(i)) }
+                        }
+                        .stroke(LinearGradient(colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
+                                                        Color(red: 0.16, green: 0.65, blue: 0.77)],
+                                               startPoint: .leading, endPoint: .trailing),
+                                style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        Circle().fill(.white).frame(width: 8, height: 8).position(pos(n - 1))
                     }
-                    .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.82, blue: 0.96).opacity(0.32), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    Path { p in
-                        p.move(to: pos(0))
-                        for i in pts.indices.dropFirst() { p.addLine(to: pos(i)) }
-                    }
-                    .stroke(LinearGradient(colors: [Color(red: 0.62, green: 0.91, blue: 1.0),
-                                                    Color(red: 0.16, green: 0.65, blue: 0.77)],
-                                           startPoint: .leading, endPoint: .trailing),
-                            style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    Circle().fill(.white).frame(width: 8, height: 8).position(pos(n - 1))
                 }
             }
             .frame(height: 92)
@@ -128,6 +153,12 @@ struct HourlyTemperatureCard: View {
 
 struct DailyTrendCard: View {
     let days: [DayTrend]
+    /// When `false`, the internal title row is omitted — the caller is
+    /// rendering it externally (as a sticky section header above the card).
+    var showHeader: Bool = true
+    /// Card corner style. `.bottom` is used when a sticky header sits flush
+    /// on top of this card and supplies the rounded top corners.
+    var corners: GlassCardCorners = .all
     @Environment(\.temperatureUnit) private var unit
 
     private var bounds: (min: Double, max: Double) {
@@ -137,12 +168,14 @@ struct DailyTrendCard: View {
     }
 
     var body: some View {
-        GlassCard {
+        GlassCard(corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("7-TAGE-TREND")
-                    .font(.system(size: 13, weight: .semibold)).tracking(0.4)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .padding(.bottom, 6)
+                if showHeader {
+                    Text("7-TAGE-TREND")
+                        .font(.system(size: 13, weight: .semibold)).tracking(0.4)
+                        .foregroundStyle(.white.opacity(0.62))
+                        .padding(.bottom, 6)
+                }
                 ForEach(days) { day in
                     row(day)
                     if day.id != days.last?.id {
@@ -189,17 +222,21 @@ struct DailyTrendCard: View {
 struct AirWaterCard: View {
     let water: Double
     let air: Double?
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "LUFT & WASSER", systemImage: "thermometer.variable.and.figure")
+                if showHeader {
+                    CardHeader(title: "LUFT & WASSER", systemImage: "wind")
+                }
                 VStack(spacing: 9) {
                     valueRow("Wasser", value: "\(Fmt.temp1(water, unit))°")
                     valueRow("Luft", value: air.map { "\(Fmt.temp0($0, unit))°" } ?? "–")
                 }
-                .padding(.top, 13)
+                .padding(.top, showHeader ? 13 : 0)
                 Text(note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 9)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -227,12 +264,16 @@ struct AirWaterCard: View {
 struct UVCard: View {
     let index: Int
     let category: String
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
 
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "UV-INDEX", systemImage: "sun.max")
-                Text("\(index)").font(.system(size: 34, weight: .light)).padding(.top, 8)
+                if showHeader {
+                    CardHeader(title: "UV-INDEX", systemImage: "sun.max")
+                }
+                Text("\(index)").font(.system(size: 34, weight: .light)).padding(.top, showHeader ? 8 : 0)
                 Text(category).font(.system(size: 19, weight: .medium))
                 Spacer(minLength: 8)
                 GeometryReader { geo in
@@ -265,11 +306,15 @@ struct WindCard: View {
     let gust: Double
     let compass: String
     let degrees: Double
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
 
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "WIND", systemImage: "wind")
+                if showHeader {
+                    CardHeader(title: "WIND", systemImage: "wind")
+                }
                 HStack(spacing: 12) {
                     compassDial
                     VStack(alignment: .leading, spacing: 2) {
@@ -279,7 +324,7 @@ struct WindCard: View {
                     }
                     Spacer()
                 }
-                .padding(.top, 10)
+                .padding(.top, showHeader ? 10 : 0)
             }
         }
         .foregroundStyle(.white)
@@ -307,13 +352,17 @@ struct WindCard: View {
 struct BadehinweisCard: View {
     let comfort: SwimComfort
     let waterTemperature: Double
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     @Environment(\.temperatureUnit) private var unit
 
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "BADEHINWEIS", systemImage: comfort.symbolName)
-                Text(comfort.rating).font(.system(size: 22, weight: .medium)).padding(.top, 8)
+                if showHeader {
+                    CardHeader(title: "BADEHINWEIS", systemImage: comfort.symbolName)
+                }
+                Text(comfort.rating).font(.system(size: 22, weight: .medium)).padding(.top, showHeader ? 8 : 0)
                 Text(comfort.note).font(.system(size: 12.5)).opacity(0.72).padding(.top, 4)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
@@ -331,11 +380,15 @@ struct BadehinweisCard: View {
 
 struct WaveCard: View {
     let marine: MarineInfo
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "WELLENHÖHE", systemImage: "water.waves")
-                Text("\(Fmt.f1(marine.waveHeightMeters)) m").font(.system(size: 34, weight: .light)).padding(.top, 8)
+                if showHeader {
+                    CardHeader(title: "WELLENHÖHE", systemImage: "water.waves")
+                }
+                Text("\(Fmt.f1(marine.waveHeightMeters)) m").font(.system(size: 34, weight: .light)).padding(.top, showHeader ? 8 : 0)
                 Text("Periode \(marine.wavePeriodSeconds) s").font(.system(size: 13)).opacity(0.72).padding(.top, 6)
             }
         }
@@ -345,12 +398,16 @@ struct WaveCard: View {
 
 struct TideCard: View {
     let marine: MarineInfo
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "GEZEITEN", systemImage: "water.waves.and.arrow.trianglehead.up")
+                if showHeader {
+                    CardHeader(title: "GEZEITEN", systemImage: "water.waves.and.arrow.trianglehead.up")
+                }
                 TideWave().stroke(Color.white.opacity(0.55), lineWidth: 2)
-                    .frame(height: 40).padding(.top, 10)
+                    .frame(height: 40).padding(.top, showHeader ? 10 : 0)
                 Spacer(minLength: 6)
                 HStack {
                     Text("Hochw. \(marine.nextHighTide)")
@@ -388,17 +445,22 @@ struct TideCard: View {
 struct AbflussCard: View {
     let discharge: Measurement
     let annualMean: Double?
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        let unit = discharge.unit ?? "m³/s"
+        return GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
+                if showHeader {
+                    CardHeader(title: "ABFLUSS", systemImage: "water.waves.and.arrow.trianglehead.up")
+                }
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text(Fmt.f1(discharge.value)).font(.system(size: 34, weight: .light))
-                    Text("m³/s").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                    Text(unit).font(.system(size: 15, weight: .medium)).opacity(0.72)
                 }
-                .padding(.top, 8)
+                .padding(.top, showHeader ? 8 : 0)
                 if let delta = AnnualDelta.text(value: discharge.value, mean: annualMean,
-                                                unit: "m³/s", oneDecimal: true) {
+                                                unit: unit, oneDecimal: true) {
                     Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -414,18 +476,39 @@ struct AbflussCard: View {
 struct WasserstandCard: View {
     let level: Measurement
     let annualMean: Double?
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        let unit = level.unit ?? "cm"
+        // Lake / dam stations report "m ü. NN" (absolute height above sea
+        // level) where variation is in centimetres, so a coarse integer
+        // display loses the signal — use two decimals there. The longer
+        // "m ü. NN" unit string also doesn't fit at the headline font
+        // size, so the value/unit row uses a smaller layout for it.
+        let asMeters = unit.contains("m") && !unit.hasPrefix("cm")
+        return GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "WASSERSTAND", systemImage: "ruler")
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text("\(Fmt.f0(level.value))").font(.system(size: 34, weight: .light))
-                    Text("cm").font(.system(size: 15, weight: .medium)).opacity(0.72)
+                if showHeader {
+                    CardHeader(title: "WASSERSTAND", systemImage: "ruler")
                 }
-                .padding(.top, 8)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(asMeters ? Fmt.f2(level.value) : Fmt.f0(level.value))
+                        .font(.system(size: asMeters ? 24 : 34, weight: .light))
+                    Text(unit)
+                        .font(.system(size: asMeters ? 11 : 15, weight: .medium))
+                        .opacity(0.72)
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.top, showHeader ? 8 : 0)
                 if let delta = AnnualDelta.text(value: level.value, mean: annualMean,
-                                                unit: "cm", oneDecimal: false) {
-                    Text(delta).font(.system(size: 12)).opacity(0.72).padding(.top, 6)
+                                                unit: unit, oneDecimal: asMeters) {
+                    Text(delta)
+                        .font(.system(size: 11))
+                        .opacity(0.72)
+                        .padding(.top, 6)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 6)
@@ -452,11 +535,15 @@ enum AnnualDelta {
 
 struct FlowCard: View {
     let flow: FlowInfo
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "STRÖMUNG", systemImage: "arrow.right.to.line")
-                Text(Fmt.f1(flow.speedMetersPerSecond)).font(.system(size: 34, weight: .light)).padding(.top, 8)
+                if showHeader {
+                    CardHeader(title: "STRÖMUNG", systemImage: "arrow.right.to.line")
+                }
+                Text(Fmt.f1(flow.speedMetersPerSecond)).font(.system(size: 34, weight: .light)).padding(.top, showHeader ? 8 : 0)
                 Text("m/s · \(flow.direction)").font(.system(size: 13)).opacity(0.72)
             }
         }
@@ -469,13 +556,20 @@ struct FlowCard: View {
 struct SunriseCard: View {
     let sunrise: Date?
     let sunset: Date?
+    var showHeader: Bool = true
+    var corners: GlassCardCorners = .all
 
     var body: some View {
-        GlassCard(minHeight: smallCardMinHeight) {
+        GlassCard(minHeight: smallCardMinHeight, corners: corners) {
             VStack(alignment: .leading, spacing: 0) {
-                CardHeader(title: "SONNENAUFGANG", systemImage: "sunrise")
+                if showHeader {
+                    CardHeader(title: "SONNE", systemImage: "sunrise")
+                }
                 Text(sunrise.map(Fmt.time) ?? "–")
-                    .font(.system(size: 30, weight: .light)).padding(.top, 8)
+                    .font(.system(size: 30, weight: .light)).padding(.top, showHeader ? 8 : 0)
+                Text("Sonnenaufgang")
+                    .font(.system(size: 11, weight: .medium)).opacity(0.7)
+                    .padding(.top, 1)
                 Spacer(minLength: 12)
                 arc
                 Spacer(minLength: 12)

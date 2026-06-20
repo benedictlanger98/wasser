@@ -53,6 +53,15 @@ struct GKDScraper: Sendable {
         return GKDParser.parseDailyTable(html: html)
     }
 
+    /// Fetches the station's Stammdaten page and pulls Nordwert / Ostwert from
+    /// it. Returns nil on transport failure, missing URL, or unparseable
+    /// content — coordinate resolution is best-effort.
+    func stammdaten(for station: MeasurementStation) async -> GKDParser.StammdatenLocation? {
+        guard let url = GKDEndpoints.stammdataURL(for: station),
+              let html = try? await client.getText(url) else { return nil }
+        return GKDParser.parseStammdaten(html: html)
+    }
+
     /// A time series for a parameter — the recent 15-min table.
     func timeSeries(for station: MeasurementStation,
                     parameter: MeasurementParameter,

@@ -71,7 +71,7 @@ final class WaterRepository: ObservableObject {
     /// recognisable Bavarian waters so the detail screen has content.
     private func seedDefaultFavoritesIfNeeded() {
         guard favoriteIDs.isEmpty, !stations.isEmpty else { return }
-        let preferred = ["Starnberger See", "Chiemsee", "Tegernsee", "Königssee", "Isar"]
+        let preferred = ["Starnberger See", "Chiemsee", "Tegernsee"]
         // Match on a normalised key (diacritics folded, non-alphanumerics
         // dropped) so the scraped names ("StarnbergerSee") still resolve.
         func key(_ s: String) -> String {
@@ -118,9 +118,13 @@ final class WaterRepository: ObservableObject {
             return cached.value
         }
         // Hydrology and weather are fetched concurrently from independent
-        // providers, then merged — neither blocks the other.
+        // providers, then merged — neither blocks the other. The weather call
+        // needs a real WGS84 coordinate; when the station's stored coordinate
+        // is missing (GKD overview rows lack one), the registry resolves it
+        // from the data source's Stammdaten cache before WeatherKit is asked.
         async let hydrology = registry.fetchCurrentConditions(for: station)
-        async let weather = weatherProvider.currentWeather(at: station.coordinate)
+        let weatherCoord = await registry.resolveCoordinate(for: station)
+        async let weather = weatherProvider.currentWeather(at: weatherCoord)
         let base = try await hydrology
         let merged = StationConditions(stationID: base.stationID,
                                        latest: base.latest,
@@ -201,5 +205,9 @@ final class WaterRepository: ObservableObject {
         if let data = try? JSONEncoder().encode(favoriteOrder) {
             UserDefaults.standard.set(data, forKey: favoritesKey)
         }
+        // Re-publish the shared widget snapshot whenever the saved list
+        // changes — without this, the home-screen widget keeps offering only
+        // the stations that existed the last time the app was foregrounded.
+        Task { await publishWidgetData() }
     }
 }

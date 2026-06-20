@@ -16,22 +16,18 @@ struct RootView: View {
             // water tones instead of black.
             backgroundView
 
-            if repository.isLoadingStations && repository.stations.isEmpty {
-                // The themed gradient is already on screen, so no jarring white
-                // launch — just a quiet spinner over it.
-                ProgressView().tint(.white)
-            } else {
-                detailLayer
-            }
+            // Always render the detail layer so launch is instant: an empty
+            // pager over the themed background, populated as stations resolve.
+            detailLayer
 
             if router.screen == .list {
                 SavedLocationsListView()
-                    .transition(.move(edge: .trailing))
+                    .transition(.move(edge: .bottom))
                     .zIndex(2)
             }
             if router.screen == .search {
                 SearchView()
-                    .transition(.move(edge: .trailing))
+                    .transition(.move(edge: .bottom))
                     .zIndex(3)
             }
         }
@@ -93,8 +89,11 @@ struct RootView: View {
 
             bottomBar
         }
-        .opacity(router.screen == .detail ? 1 : 0.5)
-        .offset(x: router.screen == .detail ? 0 : -UIScreen.main.bounds.width * 0.22)
+        // List/search now slide up from the bottom (not in from the side),
+        // so the detail layer no longer needs to slide left in tandem.
+        // Keeping it in place avoids the jarring sideways shift the user
+        // sees when the list pops up.
+        .opacity(router.screen == .detail ? 1 : 0.85)
     }
 
     private var activeBinding: Binding<String> {

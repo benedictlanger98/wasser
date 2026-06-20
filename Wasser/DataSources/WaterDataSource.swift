@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Errors any data source can surface, kept transport-agnostic.
@@ -51,10 +52,20 @@ protocol WaterDataSource: Sendable {
     func fetchDailyTrend(for station: MeasurementStation,
                          parameter: MeasurementParameter,
                          days: Int) async throws -> [DailyAggregate]
+
+    /// Resolves the best-known WGS84 coordinate for a station. The default
+    /// implementation just returns the station's stored coordinate; sources
+    /// whose station catalogues omit coordinates (e.g. GKD's overview tables)
+    /// can override to fetch and cache the real one.
+    func resolveCoordinate(for station: MeasurementStation) async -> CLLocationCoordinate2D
 }
 
 extension WaterDataSource {
     func fetchDailyTrend(for station: MeasurementStation,
                          parameter: MeasurementParameter,
                          days: Int) async throws -> [DailyAggregate] { [] }
+
+    func resolveCoordinate(for station: MeasurementStation) async -> CLLocationCoordinate2D {
+        station.coordinate
+    }
 }
